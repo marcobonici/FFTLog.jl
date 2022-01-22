@@ -20,20 +20,20 @@ function _cwindow(N::AbstractArray{T}, NCut::I) where {T,I}
     return W
 end
 
-@kwdef mutable struct FFTLogPlan{T,C,I}
-    XArray::AbstractArray{T}
-    DLnX::T = log(XArray[2]/XArray[1])
-    FXArray::AbstractArray{T}
-    OriginalLenght::I = length(XArray)
-    ν::T = 1.01
-    NExtrapLow::I = 0
-    NExtrapHigh::I = 0
-    CWindowWidth::T = 0.25
-    NPad::I = 500
-    N::I = OriginalLenght+NExtrapHigh+NExtrapLow+2*NPad
-    M::AbstractArray{T} = zeros(N)
-    CM::AbstractArray{C} = zeros(N)
-    ηM::AbstractArray{T} = zeros(N)
+@kwdef mutable struct FFTLogPlan
+    XArray::Vector{Float64}
+    DLnX::Float64 = log(XArray[2]/XArray[1])
+    FXArray::Vector{Float64}
+    OriginalLenght::Int64 = length(XArray)
+    ν::Float64 = 1.01
+    NExtrapLow::Int64 = 0
+    NExtrapHigh::Int64 = 0
+    CWindowWidth::Float64 = 0.25
+    NPad::Int64 = 0
+    N::Int64 = OriginalLenght+NExtrapHigh+NExtrapLow+2*NPad
+    M::Vector{Float64} = zeros(N)
+    CM::Vector{ComplexF64} = zeros(N)
+    ηM::Vector{Float64} = zeros(N)
 end
 
 function _evalcm!(FFTLog::FFTLogPlan)
