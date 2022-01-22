@@ -1,0 +1,4 @@
+name = "FFTLog"
+uuid = "a00cc2bc-8b4a-4b7f-b12a-0794eb62aad9"
+authors = ["marcobonici <bonici.marco@gmail.com>"]
+version = "0.1.0"
