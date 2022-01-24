@@ -74,7 +74,12 @@ function _g_m_vals(Mu::Float64, Q::Array{Complex{Float64},1})
 end
 
 function _gl(Ell::Float64, ZArray::Vector{ComplexF64})
-    GL = 2 .^ZArray .* _g_m_vals(Ell+0.5, ZArray .- 1.5)
+    GL = 2 .^ZArray .*  _g_m_vals(Ell+0.5, ZArray .- 1.5)
+    return GL
+end
+
+function _gl(Ell::Float64, ZArray::Vector{ComplexF64}, TwoZArray::Vector{ComplexF64})
+    GL = TwoZArray .* SpecialFunctions.gamma.((Ell .+ ZArray)/2) ./ SpecialFunctions.gamma.((3 .+ Ell .- ZArray)/2)
     return GL
 end
 
@@ -133,10 +138,11 @@ function evaluateFFTLog(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     YArray = zeros(length(Ell), length(FFTLog.XArray))
     HMArray = zeros(ComplexF64, length(Ell), length(FFTLog.CM))
     FYArray = zeros(length(Ell), length(FFTLog.XArray))
+    TwoZArray = 2 .^ ZAr
     @inbounds for myl in 1:length(Ell)
         YArray[myl,:] = (Ell[myl] + 1) ./ reverse(FFTLog.XArray)
         HMArray[myl,:]  = FFTLog.CM .* (FFTLog.XArray[1] .* YArray[myl,1] ) .^
-		(-im .*FFTLog.ηM) .* _gl(Ell[myl], ZAr)
+		(-im .*FFTLog.ηM) .* _gl(Ell[myl], ZAr, TwoZArray)
         FYArray[myl,:] = FFTW.irfft(conj(HMArray[myl,:]),
 		length(FFTLog.XArray)) .* YArray[myl,:] .^ (-FFTLog.ν) .* sqrt(π) ./4
     end
@@ -155,6 +161,7 @@ function EvaluateFFTLogDJ(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     _evalηm!(FFTLog)
     X0 = FFTLog.XArray[1]
     ZAr = FFTLog.ν .+ im .* FFTLog.ηM
+    TwoZAr = 2 .^ZAr
     YArray = zeros(length(Ell), length(FFTLog.XArray))
     HMArray = zeros(ComplexF64, length(Ell), length(FFTLog.CM))
     FYArray = zeros(length(Ell), length(FFTLog.XArray))
