@@ -5,10 +5,10 @@ using Base: @kwdef
 using SpecialFunctions
 
 """
-    CWindow(N::Vector{Float64}, NCut::Int64)
+    _cwindow(N::Vector{Float64}, NCut::Int64)
 
 This function evaluates the smoothing window function as defined
-in Eq. (C.1) of [McEwen et (2016)](https://arxiv.org/abs/1603.04826).
+in Eq. (C.1) of [McEwen et al. (2016)](https://arxiv.org/abs/1603.04826).
 """
 function _cwindow(N::AbstractArray{T}, NCut::I) where {T,I}
     NRight = last(N) - NCut
