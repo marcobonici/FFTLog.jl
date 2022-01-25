@@ -38,6 +38,8 @@ end
     CM::Vector{ComplexF64} = zeros(N)
     ηM::Vector{Float64} = zeros(N)
     PlanFFT::FFTW.rFFTWPlan = FFTW.plan_rfft(randn(1024))
+    PlanIFFT = plan_irfft(randn(Complex{Float64},
+    Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)
 end
 
 function _evalcm!(FFTLog::FFTLogPlan)
@@ -182,8 +184,7 @@ function EvaluateFFTLogDJ(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
         YArray[myl,:] = (Ell[myl] + 1) ./ reverse(FFTLog.XArray)
         HMArray[myl,:]  = FFTLog.CM .* (FFTLog.XArray[1] .* YArray[myl,1] ) .^
 		(-im .*FFTLog.ηM) .* _gl1(Ell[myl], ZAr)
-        FYArray[myl,:] = FFTW.irfft(conj(HMArray[myl,:]),
-		length(FFTLog.XArray)) .* YArray[myl,:] .^ (-FFTLog.ν) .* sqrt(π) ./4
+        FYArray[myl,:] = FFTLog.PlanIFFT * conj(HMArray[myl,:])
     end
     return YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
 	FFTLog.NPad+FFTLog.OriginalLenght], FYArray[:,FFTLog.NExtrapLow+FFTLog.NPad+
