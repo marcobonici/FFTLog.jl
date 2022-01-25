@@ -7,7 +7,7 @@ using SpecialFunctions
 """
     _cwindow(N::Vector{Float64}, NCut::Int64)
 
-This function evaluates the smoothing window function as defined
+This function returns the smoothing window function as defined
 in Eq. (C.1) of [McEwen et al. (2016)](https://arxiv.org/abs/1603.04826).
 """
 function _cwindow(N::AbstractArray{T}, NCut::I) where {T,I}
@@ -44,8 +44,7 @@ end
 
 function _evalcm!(FFTLog::FFTLogPlan)
     FFTLog.CM = FFTLog.PlanFFT * (FFTLog.FXArray .* FFTLog.XArray .^ (-FFTLog.ν))
-    FFTLog.CM = FFTLog.CM .* _cwindow(FFTLog.M, floor(Int,
-	FFTLog.CWindowWidth*FFTLog.N/2))
+    FFTLog.CM .*= _cwindow(FFTLog.M, floor(Int, FFTLog.CWindowWidth*FFTLog.N/2))
 end
 
 function _evalηm!(FFTLog::FFTLogPlan)
@@ -133,6 +132,7 @@ end
 function prepareFFTLog!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     FFTLog.XArray = _logextrap(FFTLog.XArray, FFTLog.NExtrapLow,
 	FFTLog.NExtrapHigh)
+    #TODO: move to a better location, since the extrapolation need to be done after the FX array specification
     FFTLog.FXArray = _logextrap(FFTLog.FXArray, FFTLog.NExtrapLow,
 	FFTLog.NExtrapHigh)
     _zeropad!(FFTLog)
@@ -151,16 +151,21 @@ end
 function evaluateFFTLog(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     _evalcm!(FFTLog)
     YArray = zeros(length(Ell), length(FFTLog.XArray))
-    HMArray = zeros(ComplexF64, length(Ell), length(FFTLog.CM))
+    HMArray = zeros(ComplexF64, length(FFTLog.CM))
     FYArray = zeros(length(Ell), length(FFTLog.XArray))
 
+    reverse!(FFTLog.XArray)
+
     @inbounds for myl in 1:length(Ell)
-        YArray[myl,:] = (Ell[myl] + 1) ./ reverse(FFTLog.XArray)
-        HMArray[myl,:]  = FFTLog.CM .* (FFTLog.XArray[1] .* YArray[myl,1] ) .^
+        YArray[myl,:] = (Ell[myl] + 1) ./ FFTLog.XArray
+        HMArray = FFTLog.CM .* (FFTLog.XArray[end] .* YArray[myl,1] ) .^
 		(-im .*FFTLog.ηM) .* FFTLog.GLArray[myl,:]
-        FYArray[myl,:] = FFTW.irfft(conj(HMArray[myl,:]),
+        FYArray[myl,:] = FFTW.irfft(conj!(HMArray),
 		length(FFTLog.XArray)) .* YArray[myl,:] .^ (-FFTLog.ν) .* sqrt(π) ./4
     end
+
+    reverse!(FFTLog.XArray)
+
     return YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
 	FFTLog.NPad+FFTLog.OriginalLenght], FYArray[:,FFTLog.NExtrapLow+FFTLog.NPad+
 	1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
