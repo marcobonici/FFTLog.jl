@@ -37,10 +37,11 @@ end
     M::Vector{Float64} = zeros(N)
     CM::Vector{ComplexF64} = zeros(N)
     ηM::Vector{Float64} = zeros(N)
+    PlanFFT::FFTW.rFFTWPlan = FFTW.plan_rfft(randn(1024))
 end
 
 function _evalcm!(FFTLog::FFTLogPlan)
-    FFTLog.CM = FFTW.rfft(FFTLog.FXArray .* FFTLog.XArray .^ (-FFTLog.ν))
+    FFTLog.CM = FFTLog.PlanFFT * (FFTLog.FXArray .* FFTLog.XArray .^ (-FFTLog.ν))
     FFTLog.CM = FFTLog.CM .* _cwindow(FFTLog.M, floor(Int,
 	FFTLog.CWindowWidth*FFTLog.N/2))
 end
@@ -141,6 +142,7 @@ function prepareFFTLog!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     for myl in 1:length(Ell)
         FFTLog.GLArray[myl,:] = _gl(Ell[myl], FFTLog.ZArray, FFTLog.TwoZArray)
     end
+    FFTLog.PlanFFT = plan_rfft(FFTLog.FXArray)
 end
 
 
