@@ -23,8 +23,10 @@ end
 @kwdef mutable struct FFTLogPlan
     XArray::Vector{Float64}
     YArray::Matrix{Float64} = zeros(10,10)
+    HMArrayCorr::Matrix{ComplexF64} = zeros(10,10)
     DLnX::Float64 = log(XArray[2]/XArray[1])
     FXArray::Vector{Float64}
+    FYArrayCorr::Matrix{Float64} = zeros(10,10)
     ZArray::Vector{ComplexF64} = zeros(100)
     TwoZArray::Vector{ComplexF64} = zeros(100)
     OriginalLenght::Int64 = length(XArray)
@@ -103,16 +105,25 @@ function prepareFFTLog!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     #TODO: the previous extrapolations can be unified
 
     FFTLog.YArray = zeros(length(Ell), length(FFTLog.XArray))
+    FFTLog.FYArrayCorr = zeros(size(FFTLog.YArray))
+    
 
     reverse!(FFTLog.XArray)
+
     @inbounds for myl in 1:length(Ell)
         FFTLog.YArray[myl,:] = (Ell[myl] + 1) ./ FFTLog.XArray
+        FFTLog.FYArrayCorr[myl,:] = FFTLog.YArray[myl,:] .^ (-FFTLog.ν) .* sqrt(π) ./4
     end
     reverse!(FFTLog.XArray)
-
-
+    
     FFTLog.M = Array(0:length(FFTLog.XArray)/2)
     _evalηm!(FFTLog)
+    FFTLog.HMArrayCorr = zeros(ComplexF64, length(Ell), Int(FFTLog.N/2+1))
+
+    @inbounds for myl in 1:length(Ell)
+        FFTLog.HMArrayCorr[myl,:] = (FFTLog.XArray[1] .* FFTLog.YArray[myl,1] ) .^ (-im .*FFTLog.ηM)
+    end
+
     FFTLog.ZArray = FFTLog.ν .+ im .* FFTLog.ηM
     FFTLog.TwoZArray = 2 .^ FFTLog.ZArray
     FFTLog.GLArray = zeros(length(Ell), length(FFTLog.ZArray))
@@ -130,26 +141,15 @@ function evaluateFFTLog(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     _evalcm!(FFTLog)
     FFTLog.FXArray = @view FFTLog.FXArray[FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
 	FFTLog.NPad+FFTLog.OriginalLenght]
-    #YArray = zeros(length(Ell), length(FFTLog.XArray))
-    HMArray = zeros(ComplexF64, length(FFTLog.CM))
     FYArray = zeros(length(Ell), length(FFTLog.XArray))
 
-    reverse!(FFTLog.XArray)
-
     @inbounds for myl in 1:length(Ell)
-        #YArray[myl,:] = (Ell[myl] + 1) ./ FFTLog.XArray
-        #TODO remove exponentiation here (do once for all)
-        HMArray = FFTLog.CM .* (FFTLog.XArray[end] .* FFTLog.YArray[myl,1] ) .^
-		(-im .*FFTLog.ηM) .* FFTLog.GLArray[myl,:]
+        HMArray = FFTLog.CM .* @view FFTLog.GLArray[myl,:]
+        HMArray .*= @view FFTLog.HMArrayCorr[myl, :]
         FYArray[myl,:] = FFTLog.PlanIFFT * conj!(HMArray)
-        #TODO remove exponentiation here (do once for all)
-        FYArray[myl,:] .*= FFTLog.YArray[myl,:] .^ (-FFTLog.ν) .* sqrt(π) ./4
+        FYArray[myl,:] .*= @view FFTLog.FYArrayCorr[myl,:]
     end
 
-    reverse!(FFTLog.XArray)
-
-    #YArray = @view FFTLog.YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
-	#FFTLog.NPad+FFTLog.OriginalLenght]
     FYArray = @view FYArray[:,FFTLog.NExtrapLow+FFTLog.NPad+
 	1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
     return FFTLog.YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
@@ -178,6 +178,7 @@ function EvaluateFFTLogDJ(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
 		(-im .*FFTLog.ηM) .* _gl1(Ell[myl], ZAr)
         FYArray[myl,:] = FFTLog.PlanIFFT * conj(HMArray[myl,:])
     end
+    
     return YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
 	FFTLog.NPad+FFTLog.OriginalLenght], FYArray[:,FFTLog.NExtrapLow+FFTLog.NPad+
 	1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
