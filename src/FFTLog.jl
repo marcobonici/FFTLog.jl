@@ -22,6 +22,7 @@ end
 
 @kwdef mutable struct FFTLogPlan
     XArray::Vector{Float64}
+    YArray::Matrix{Float64} = zeros(10,10)
     DLnX::Float64 = log(XArray[2]/XArray[1])
     FXArray::Vector{Float64}
     ZArray::Vector{ComplexF64} = zeros(100)
@@ -98,7 +99,18 @@ function prepareFFTLog!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
 	FFTLog.NExtrapHigh)
     FFTLog.XArray = _logextrap!(FFTLog.XArray,FFTLog.NPad,
 	FFTLog.NPad)
+
     #TODO: the previous extrapolations can be unified
+
+    FFTLog.YArray = zeros(length(Ell), length(FFTLog.XArray))
+
+    reverse!(FFTLog.XArray)
+    @inbounds for myl in 1:length(Ell)
+        FFTLog.YArray[myl,:] = (Ell[myl] + 1) ./ FFTLog.XArray
+    end
+    reverse!(FFTLog.XArray)
+
+
     FFTLog.M = Array(0:length(FFTLog.XArray)/2)
     _evalηm!(FFTLog)
     FFTLog.ZArray = FFTLog.ν .+ im .* FFTLog.ηM
@@ -118,29 +130,30 @@ function evaluateFFTLog(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     _evalcm!(FFTLog)
     FFTLog.FXArray = @view FFTLog.FXArray[FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
 	FFTLog.NPad+FFTLog.OriginalLenght]
-    YArray = zeros(length(Ell), length(FFTLog.XArray))
+    #YArray = zeros(length(Ell), length(FFTLog.XArray))
     HMArray = zeros(ComplexF64, length(FFTLog.CM))
     FYArray = zeros(length(Ell), length(FFTLog.XArray))
 
     reverse!(FFTLog.XArray)
 
     @inbounds for myl in 1:length(Ell)
-        YArray[myl,:] = (Ell[myl] + 1) ./ FFTLog.XArray
+        #YArray[myl,:] = (Ell[myl] + 1) ./ FFTLog.XArray
         #TODO remove exponentiation here (do once for all)
-        HMArray = FFTLog.CM .* (FFTLog.XArray[end] .* YArray[myl,1] ) .^
+        HMArray = FFTLog.CM .* (FFTLog.XArray[end] .* FFTLog.YArray[myl,1] ) .^
 		(-im .*FFTLog.ηM) .* FFTLog.GLArray[myl,:]
         FYArray[myl,:] = FFTLog.PlanIFFT * conj!(HMArray)
         #TODO remove exponentiation here (do once for all)
-        FYArray[myl,:] .*= YArray[myl,:] .^ (-FFTLog.ν) .* sqrt(π) ./4
+        FYArray[myl,:] .*= FFTLog.YArray[myl,:] .^ (-FFTLog.ν) .* sqrt(π) ./4
     end
 
     reverse!(FFTLog.XArray)
 
-    YArray = @view YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
-	FFTLog.NPad+FFTLog.OriginalLenght]
+    #YArray = @view FFTLog.YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
+	#FFTLog.NPad+FFTLog.OriginalLenght]
     FYArray = @view FYArray[:,FFTLog.NExtrapLow+FFTLog.NPad+
 	1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
-    return YArray, FYArray
+    return FFTLog.YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
+	FFTLog.NPad+FFTLog.OriginalLenght], FYArray
 end
 
 #maybe we can remove the following functions, and unite them using a macro
