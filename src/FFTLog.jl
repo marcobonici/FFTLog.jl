@@ -53,8 +53,8 @@ function _evalηm!(FFTLog::FFTLogPlan)
     return FFTLog.ηM
 end
 
-function _gl(Ell::Float64, ZArray::Vector{ComplexF64}, TwoZArray::Vector{ComplexF64})
-    GL = TwoZArray .* gamma.((Ell .+ ZArray)/2) ./ gamma.((3 .+ Ell .- ZArray)/2)
+function _gl(Ell::Float64, ZArray::Vector{ComplexF64})
+    GL = 2 .^ ZArray .* gamma.((Ell .+ ZArray)/2) ./ gamma.((3 .+ Ell .- ZArray)/2)
     return GL
 end
 
@@ -71,15 +71,6 @@ function _logextrap(X::Vector{Float64}, NExtrapLow::Int64, NExtrapHigh::Int64)
     end
     return X
 end
-
-"""
-#TODO: remove after removing FFTLog auxiliary methods
-function _zeropad!(FFTLog::FFTLogPlan)
-    ZeroArray = zeros(FFTLog.NPad)
-    FFTLog.XArray = _logextrap(FFTLog.XArray, FFTLog.NPad, FFTLog.NPad)
-    FFTLog.FXArray = vcat(ZeroArray, FFTLog.FXArray, ZeroArray)
-end
-"""
 
 function _zeropad(X::Vector{Float64}, NPad::Int)
     ZeroArray = zeros(NPad)
@@ -113,10 +104,9 @@ function prepareFFTLog!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     end
 
     ZArray = FFTLog.ν .+ im .* FFTLog.ηM
-    TwoZArray = 2 .^ ZArray
     FFTLog.GLArray = zeros(length(Ell), length(ZArray))
     @inbounds for myl in 1:length(Ell)
-        FFTLog.GLArray[myl,:] = _gl(Ell[myl], ZArray, TwoZArray)
+        FFTLog.GLArray[myl,:] = _gl(Ell[myl], ZArray)
     end
     FFTLog.PlanFFT = plan_rfft(FFTLog.XArray)
 end
