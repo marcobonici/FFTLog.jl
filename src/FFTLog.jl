@@ -25,10 +25,7 @@ end
     YArray::Matrix{Float64} = zeros(10,10)
     HMArrayCorr::Matrix{ComplexF64} = zeros(10,10)
     DLnX::Float64 = log(XArray[2]/XArray[1])
-    FXArray::Vector{Float64}
     FYArrayCorr::Matrix{Float64} = zeros(10,10)
-    ZArray::Vector{ComplexF64} = zeros(100)
-    TwoZArray::Vector{ComplexF64} = zeros(100)
     OriginalLenght::Int64 = length(XArray)
     GLArray::Matrix{ComplexF64} = zeros(100,100)
     ν::Float64 = 1.01
@@ -42,11 +39,12 @@ end
     ηM::Vector{Float64} = zeros(N)
     PlanFFT::FFTW.rFFTWPlan = FFTW.plan_rfft(randn(1024))
     PlanIFFT = plan_irfft(randn(Complex{Float64},
-    Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)
+    Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),
+    OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)
 end
 
-function _evalcm!(FFTLog::FFTLogPlan)
-    FFTLog.CM = FFTLog.PlanFFT * (FFTLog.FXArray .* FFTLog.XArray .^ (-FFTLog.ν))
+function _evalcm!(FFTLog::FFTLogPlan, FXArray)
+    FFTLog.CM = FFTLog.PlanFFT * (FXArray .* FFTLog.XArray .^ (-FFTLog.ν))
     FFTLog.CM .*= _cwindow(FFTLog.M, floor(Int, FFTLog.CWindowWidth*FFTLog.N/2))
 end
 
@@ -60,7 +58,7 @@ function _gl(Ell::Float64, ZArray::Vector{ComplexF64}, TwoZArray::Vector{Complex
     return GL
 end
 
-function _logextrap!(X::Vector{Float64}, NExtrapLow::Int64, NExtrapHigh::Int64)
+function _logextrap(X::Vector{Float64}, NExtrapLow::Int64, NExtrapHigh::Int64)
     DLnXLow = log(X[2]/X[1])
     DLnXHigh= log(reverse(X)[1]/reverse(X)[2])
     if NExtrapLow != 0
@@ -74,74 +72,68 @@ function _logextrap!(X::Vector{Float64}, NExtrapLow::Int64, NExtrapHigh::Int64)
     return X
 end
 
+"""
+#TODO: remove after removing FFTLog auxiliary methods
 function _zeropad!(FFTLog::FFTLogPlan)
     ZeroArray = zeros(FFTLog.NPad)
-    FFTLog.XArray = _logextrap!(FFTLog.XArray, FFTLog.NPad, FFTLog.NPad)
+    FFTLog.XArray = _logextrap(FFTLog.XArray, FFTLog.NPad, FFTLog.NPad)
     FFTLog.FXArray = vcat(ZeroArray, FFTLog.FXArray, ZeroArray)
 end
+"""
 
 function _zeropad(X::Vector{Float64}, NPad::Int)
     ZeroArray = zeros(NPad)
     return vcat(ZeroArray, X, ZeroArray)
 end
 
-function _checknumberelements!(FFTLog::FFTLogPlan)
-    if iseven(FFTLog.N+1)
-        deleteat!(FFTLog.XArray, length(FFTLog.XArray))
-        deleteat!(FFTLog.FXArray, length(FFTLog.FXArray))
-        FFTLog.N -= 1
-        if (FFTLog.NExtrapHigh != 0)
-            FFTLog.NExtrapHigh -= 1
-        end
-    end
-end
-
 function prepareFFTLog!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
-    FFTLog.XArray = _logextrap!(FFTLog.XArray, FFTLog.NExtrapLow,
-	FFTLog.NExtrapHigh)
-    FFTLog.XArray = _logextrap!(FFTLog.XArray,FFTLog.NPad,
-	FFTLog.NPad)
+    FFTLog.XArray = _logextrap(FFTLog.XArray, FFTLog.NExtrapLow + FFTLog.NPad,
+	FFTLog.NExtrapHigh + FFTLog.NPad)
 
     FFTLog.YArray = zeros(length(Ell), length(FFTLog.XArray))
     FFTLog.FYArrayCorr = zeros(size(FFTLog.YArray))
     
-
     reverse!(FFTLog.XArray)
 
     @inbounds for myl in 1:length(Ell)
         FFTLog.YArray[myl,:] = (Ell[myl] + 1) ./ FFTLog.XArray
-        FFTLog.FYArrayCorr[myl,:] = FFTLog.YArray[myl,:] .^ (-FFTLog.ν) .* sqrt(π) ./4
+        FFTLog.FYArrayCorr[myl,:] =
+        FFTLog.YArray[myl,:] .^ (-FFTLog.ν) .* sqrt(π) ./4
     end
     reverse!(FFTLog.XArray)
     
     FFTLog.M = Array(0:length(FFTLog.XArray)/2)
     _evalηm!(FFTLog)
+
     FFTLog.HMArrayCorr = zeros(ComplexF64, length(Ell), Int(FFTLog.N/2+1))
 
     @inbounds for myl in 1:length(Ell)
-        FFTLog.HMArrayCorr[myl,:] = (FFTLog.XArray[1] .* FFTLog.YArray[myl,1] ) .^ (-im .*FFTLog.ηM)
+        FFTLog.HMArrayCorr[myl,:] =
+        (FFTLog.XArray[1] .* FFTLog.YArray[myl,1] ) .^ (-im .*FFTLog.ηM)
     end
 
-    FFTLog.ZArray = FFTLog.ν .+ im .* FFTLog.ηM
-    FFTLog.TwoZArray = 2 .^ FFTLog.ZArray
-    FFTLog.GLArray = zeros(length(Ell), length(FFTLog.ZArray))
-    for myl in 1:length(Ell)
-        FFTLog.GLArray[myl,:] = _gl(Ell[myl], FFTLog.ZArray, FFTLog.TwoZArray)
+    ZArray = FFTLog.ν .+ im .* FFTLog.ηM
+    TwoZArray = 2 .^ ZArray
+    FFTLog.GLArray = zeros(length(Ell), length(ZArray))
+    @inbounds for myl in 1:length(Ell)
+        FFTLog.GLArray[myl,:] = _gl(Ell[myl], ZArray, TwoZArray)
     end
     FFTLog.PlanFFT = plan_rfft(FFTLog.XArray)
 end
 
 
-function evaluateFFTLog(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
-    FFTLog.FXArray = _logextrap!(FFTLog.FXArray, FFTLog.NExtrapLow,
+function evaluateFFTLog(FFTLog::FFTLogPlan, FXArray) where T
+    FXArray = _logextrap(FXArray, FFTLog.NExtrapLow,
 	FFTLog.NExtrapHigh)
-    FFTLog.FXArray = _zeropad(FFTLog.FXArray, FFTLog.NPad)
-    _evalcm!(FFTLog)
-    FFTLog.FXArray = @view FFTLog.FXArray[FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
-	FFTLog.NPad+FFTLog.OriginalLenght]
-    FYArray = zeros(length(Ell), length(FFTLog.XArray))
+    FXArray = _zeropad(FXArray, FFTLog.NPad)
+    _evalcm!(FFTLog, FXArray)
 
-    @inbounds for myl in 1:length(Ell)
+    FXArray = @view FXArray[FFTLog.NExtrapLow+FFTLog.NPad+
+    1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
+    
+    FYArray = zeros(length(FFTLog.YArray[:,1]), length(FFTLog.XArray))
+
+    @inbounds for myl in 1:length(FFTLog.YArray[:,1])
         HMArray = FFTLog.CM .* @view FFTLog.GLArray[myl,:]
         HMArray .*= @view FFTLog.HMArrayCorr[myl, :]
         FYArray[myl,:] = FFTLog.PlanIFFT * conj!(HMArray)
@@ -155,11 +147,11 @@ function evaluateFFTLog(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
 end
 
 #maybe we can remove the following functions, and unite them using a macro
-
+"""
 function EvaluateFFTLogDJ(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
-    FFTLog.XArray = _logextrap!(FFTLog.XArray, FFTLog.NExtrapLow,
+    FFTLog.XArray = _logextrap(FFTLog.XArray, FFTLog.NExtrapLow,
 	FFTLog.NExtrapHigh)
-    FFTLog.FXArray = _logextrap!(FFTLog.FXArray, FFTLog.NExtrapLow,
+    FFTLog.FXArray = _logextrap(FFTLog.FXArray, FFTLog.NExtrapLow,
 	FFTLog.NExtrapHigh)
     _zeropad!(FFTLog)
     _evalcm!(FFTLog)
@@ -183,9 +175,9 @@ function EvaluateFFTLogDJ(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
 end
 
 function EvaluateFFTLogDDJ(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
-    FFTLog.XArray = _logextrap!(FFTLog.XArray, FFTLog.NExtrapLow,
+    FFTLog.XArray = _logextrap(FFTLog.XArray, FFTLog.NExtrapLow,
 	FFTLog.NExtrapHigh)
-    FFTLog.FXArray = _logextrap!(FFTLog.FXArray, FFTLog.NExtrapLow,
+    FFTLog.FXArray = _logextrap(FFTLog.FXArray, FFTLog.NExtrapLow,
 	FFTLog.NExtrapHigh)
     _zeropad!(FFTLog)
     _evalcm!(FFTLog)
@@ -206,7 +198,7 @@ function EvaluateFFTLogDDJ(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
 	FFTLog.NPad+FFTLog.OriginalLenght], FYArray[:,FFTLog.NExtrapLow+FFTLog.NPad+
 	1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
 end
-
+"""
 #This is the original implementation, as taken from FAST-PT. Maybe this is
 #not necessary anymore and we can remove it
 
