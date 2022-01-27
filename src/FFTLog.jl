@@ -2,7 +2,7 @@ module FFTLog
 
 using FFTW
 using Base: @kwdef
-using SpecialFunctions
+using SpecialFunctions: gamma
 
 """
     _cwindow(N::Vector{Float64}, NCut::Int64)
@@ -56,7 +56,7 @@ function _evalηm!(FFTLog::FFTLogPlan)
 end
 
 function _gl(Ell::Float64, ZArray::Vector{ComplexF64}, TwoZArray::Vector{ComplexF64})
-    GL = TwoZArray .* SpecialFunctions.gamma.((Ell .+ ZArray)/2) ./ SpecialFunctions.gamma.((3 .+ Ell .- ZArray)/2)
+    GL = TwoZArray .* gamma.((Ell .+ ZArray)/2) ./ gamma.((3 .+ Ell .- ZArray)/2)
     return GL
 end
 
@@ -68,7 +68,7 @@ function _logextrap!(X::Vector{Float64}, NExtrapLow::Int64, NExtrapHigh::Int64)
         X = vcat(LowX, X)
     end
     if NExtrapHigh != 0
-        HighX = last(X) .* exp.(DLnXLow .* Array(1:NExtrapHigh))
+        HighX = last(X) .* exp.(DLnXHigh .* Array(1:NExtrapHigh))
         X = vcat(X,HighX)
     end
     return X
@@ -101,8 +101,6 @@ function prepareFFTLog!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
 	FFTLog.NExtrapHigh)
     FFTLog.XArray = _logextrap!(FFTLog.XArray,FFTLog.NPad,
 	FFTLog.NPad)
-
-    #TODO: the previous extrapolations can be unified
 
     FFTLog.YArray = zeros(length(Ell), length(FFTLog.XArray))
     FFTLog.FYArrayCorr = zeros(size(FFTLog.YArray))
@@ -227,7 +225,7 @@ function _g_m_vals(Mu::Float64, Q::Array{Complex{Float64},1})
     AlphaPlus  = (Mu .+1 .+ QGood) ./2
     AlphaMinus = (Mu .+1 .- QGood) ./2
     GM[findall(x->abs.(imag(x)) .+ abs(Mu) .<=cut && x != Mu + 1 , Q)] .=
-	SpecialFunctions.gamma.(AlphaPlus) ./ SpecialFunctions.gamma.(AlphaMinus)
+	gamma.(AlphaPlus) ./ gamma.(AlphaMinus)
     GM[findall(x->abs.(imag(x))+abs(Mu) .> cut && x != Mu + 1 , Q)] = exp.(
 	(AsymPlus .- 0.5) .* log.(AsymPlus) .- (AsymMinus .- 0.5) .*
 	log.(AsymMinus) .-
