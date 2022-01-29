@@ -111,6 +111,10 @@ function prepareFFTLog!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     FFTLog.PlanFFT = plan_rfft(FFTLog.XArray)
 end
 
+function prepareHankel!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
+    prepareFFTLog!(FFTLog, Ell .-0.5)
+end
+
 
 function evaluateFFTLog(FFTLog::FFTLogPlan, FXArray) where T
     FXArray = _logextrap(FXArray, FFTLog.NExtrapLow,
@@ -121,7 +125,8 @@ function evaluateFFTLog(FFTLog::FFTLogPlan, FXArray) where T
     FXArray = @view FXArray[FFTLog.NExtrapLow+FFTLog.NPad+
     1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
     
-    FYArray = zeros(length(FFTLog.YArray[:,1]), length(FFTLog.XArray))
+    #FYArray = zeros(length(FFTLog.YArray[:,1]), length(FFTLog.XArray))
+    FYArray = zeros(size(FFTLog.YArray))
 
     @inbounds for myl in 1:length(FFTLog.YArray[:,1])
         HMArray = FFTLog.CM .* @view FFTLog.GLArray[myl,:]
@@ -134,6 +139,14 @@ function evaluateFFTLog(FFTLog::FFTLogPlan, FXArray) where T
 	1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
     return FFTLog.YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
 	FFTLog.NPad+FFTLog.OriginalLenght], FYArray
+end
+
+function evaluateHankel(FFTLog::FFTLogPlan, FXArray)
+    Y , FY = evaluateFFTLog(FFTLog, FXArray .*sqrt.(
+        FFTLog.XArray[FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
+	FFTLog.NPad+FFTLog.OriginalLenght]))
+    FY .*= sqrt.(2*Y/π)
+    return Y, FY
 end
 
 #maybe we can remove the following functions, and unite them using a macro
@@ -188,7 +201,7 @@ function EvaluateFFTLogDDJ(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
 	FFTLog.NPad+FFTLog.OriginalLenght], FYArray[:,FFTLog.NExtrapLow+FFTLog.NPad+
 	1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
 end
-"""
+
 #This is the original implementation, as taken from FAST-PT. Maybe this is
 #not necessary anymore and we can remove it
 
@@ -222,6 +235,7 @@ function _gl(Ell::Float64, ZArray::Vector{ComplexF64})
     return GL
 end
 
+
 function _gl1(Ell::Float64, ZArray::Vector{ComplexF64})
     GL1 = -2 .^(ZArray .- 1) * (z_array -1) .* _g_m_vals(Ell+0.5, ZArray .- 2.5)
     return GL1
@@ -232,5 +246,5 @@ function _gl2(Ell::Float64, ZArray::Vector{ComplexF64})
 	_g_m_vals(Ell+0.5, ZArray .- 3.5)
     return GL2
 end
-
+"""
 end # module
