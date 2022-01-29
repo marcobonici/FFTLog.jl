@@ -1,6 +1,4 @@
 name: CI
-codecov:
-  token: e50a7b6a-6602-45aa-a424-8a78c036e971
 on:
   pull_request:
     branches:
