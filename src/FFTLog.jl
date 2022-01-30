@@ -3,6 +3,8 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
+import Base: *, \
+export mul!
 
 """
     _cwindow(N::Vector{Float64}, NCut::Int64)
@@ -37,7 +39,7 @@ end
     M::Vector{Float64} = zeros(N)
     CM::Vector{ComplexF64} = zeros(N)
     ηM::Vector{Float64} = zeros(N)
-    PlanFFT::FFTW.rFFTWPlan = FFTW.plan_rfft(randn(1024))
+    PlanFFT::FFTW.rFFTWPlan = plan_rfft(randn(1024))
     PlanIFFT = plan_irfft(randn(Complex{Float64},
     Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),
     OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)
@@ -115,17 +117,18 @@ function prepareHankel!(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     prepareFFTLog!(FFTLog, Ell .-0.5)
 end
 
+function getY(FFTLog::FFTLogPlan)
+    return FFTLog.YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
+	FFTLog.NPad+FFTLog.OriginalLenght]
+end
+
 
 function evaluateFFTLog(FFTLog::FFTLogPlan, FXArray) where T
     FXArray = _logextrap(FXArray, FFTLog.NExtrapLow,
 	FFTLog.NExtrapHigh)
     FXArray = _zeropad(FXArray, FFTLog.NPad)
     _evalcm!(FFTLog, FXArray)
-
-    FXArray = @view FXArray[FFTLog.NExtrapLow+FFTLog.NPad+
-    1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
     
-    #FYArray = zeros(length(FFTLog.YArray[:,1]), length(FFTLog.XArray))
     FYArray = zeros(size(FFTLog.YArray))
 
     @inbounds for myl in 1:length(FFTLog.YArray[:,1])
@@ -137,19 +140,22 @@ function evaluateFFTLog(FFTLog::FFTLogPlan, FXArray) where T
 
     FYArray = @view FYArray[:,FFTLog.NExtrapLow+FFTLog.NPad+
 	1:FFTLog.NExtrapLow+FFTLog.NPad+FFTLog.OriginalLenght]
-    return FFTLog.YArray[:,FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
-	FFTLog.NPad+FFTLog.OriginalLenght], FYArray
+    return FYArray
 end
 
 function evaluateHankel(FFTLog::FFTLogPlan, FXArray)
-    Y , FY = evaluateFFTLog(FFTLog, FXArray .*sqrt.(
+    FY = evaluateFFTLog(FFTLog, FXArray .*sqrt.(
         FFTLog.XArray[FFTLog.NExtrapLow+FFTLog.NPad+1:FFTLog.NExtrapLow+
 	FFTLog.NPad+FFTLog.OriginalLenght]))
-    FY .*= sqrt.(2*Y/π)
-    return Y, FY
+    FY .*= sqrt.(2*getY(FFTLog)/π)
+    return FY
 end
 
-#maybe we can remove the following functions, and unite them using a macro
+function mul!(Y, Q::FFTLogPlan, A)
+    Y[:,:] .= evaluateFFTLog(Q, A)
+end
+
+#maybe we can remove the following functions, and merge them using a macro
 """
 function EvaluateFFTLogDJ(FFTLog::FFTLogPlan, Ell::Vector{T}) where T
     FFTLog.XArray = _logextrap(FFTLog.XArray, FFTLog.NExtrapLow,
