@@ -19,14 +19,13 @@ end
 @testset "Analytical Hankel test" begin
     k = LogSpaced(10^(-5), 10., 2^10)
     fk = f.(k)
-    FFTTest = FFTLog.FFTLogPlan(XArray = k, NExtrapLow = 1500, ν=1.01, NExtrapHigh = 1500,
+    FFTTest = FFTLog.HankelPlan(XArray = k, NExtrapLow = 1500, ν=1.01, NExtrapHigh = 1500,
     NPad = 500)
     Ell = Array([0.])
     FFTLog.prepareHankel!(FFTTest, Ell)
     Y = FFTLog.getY(FFTTest)
     FY = zeros(size(Y));
-    fk_k2 = fk .* (k.^2)
-    FY = FFTLog.evaluateHankel(FFTTest, fk_k2)
+    FY = FFTLog.evaluateHankel(FFTTest, fk)
     Fr_analytical = F.(Y[1,:])
     @test isapprox(Fr_analytical, FY[1,:], rtol=1e-10)
 end
