@@ -3,7 +3,6 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
-import Base: *, \
 export mul!
 
 abstract type AbstractPlan end
@@ -42,9 +41,9 @@ end
     CM::Vector{ComplexF64} = zeros(N)
     ηM::Vector{Float64} = zeros(N)
     PlanFFT::FFTW.rFFTWPlan = plan_rfft(randn(1024))
-    PlanIFFT = plan_irfft(randn(Complex{Float64},
+    PlanIFFT = plan_irfft(randn(Complex{Float64}, 2,
     Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),
-    OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)
+    OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad, 2)
 end
 
 @kwdef mutable struct HankelPlan <: AbstractPlan
@@ -65,9 +64,9 @@ end
     CM::Vector{ComplexF64} = zeros(N)
     ηM::Vector{Float64} = zeros(N)
     PlanFFT::FFTW.rFFTWPlan = plan_rfft(randn(1024))
-    PlanIFFT = plan_irfft(randn(Complex{Float64},
+    PlanIFFT = plan_irfft(randn(Complex{Float64}, 2,
     Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),
-    OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)
+    OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad, 2)
 end
 
 function _evalcm!(plan::AbstractPlan, FXArray)
@@ -144,6 +143,9 @@ function prepareFFTLog!(plan::AbstractPlan, Ell::Vector{T}) where T
     _evaluateGLandHM(plan, Ell)
 
     plan.PlanFFT = plan_rfft(plan.XArray)
+    plan.PlanIFFT = plan_irfft(randn(Complex{Float64}, length(Ell),
+    Int((length(plan.XArray)/2) +1)),
+    plan.OriginalLenght+plan.NExtrapLow+plan.NExtrapHigh+2*plan.NPad, 2)
 end
 
 function prepareHankel!(hankplan::HankelPlan, Ell::Vector{T}) where T
@@ -163,13 +165,14 @@ function evaluateFFTLog(plan::AbstractPlan, FXArray) where T
     _evalcm!(plan, FXArray)
     
     FYArray = zeros(size(plan.YArray))
-
+    HMArray = zeros(ComplexF64, size(plan.GLArray))
     @inbounds for myl in 1:length(plan.YArray[:,1])
-        HMArray = plan.CM .* @view plan.GLArray[myl,:]
-        HMArray .*= @view plan.HMArrayCorr[myl, :]
-        FYArray[myl,:] = plan.PlanIFFT * conj!(HMArray)
-        FYArray[myl,:] .*= @view plan.FYArrayCorr[myl,:]
+        HMArray[myl,:] = plan.CM .* @view plan.GLArray[myl,:]
+        HMArray[myl,:] .*= @view plan.HMArrayCorr[myl, :]
     end
+
+    FYArray[:,:] = plan.PlanIFFT * conj!(HMArray)
+    FYArray[:,:] .*= @view plan.FYArrayCorr[:,:]
 
     FYArray = @view FYArray[:,plan.NExtrapLow+plan.NPad+
 	1:plan.NExtrapLow+plan.NPad+plan.OriginalLenght]
