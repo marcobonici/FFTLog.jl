@@ -45,6 +45,7 @@ Now, let us compare the numerical and the analytical transforms
 We can also plot the relative difference
 
 ![analytical_residuals](https://user-images.githubusercontent.com/58727599/151894064-c620532d-36ce-416b-a592-7612cb95f396.png)
+
 Quite good, isn't it?
 
 ## Roadmap
