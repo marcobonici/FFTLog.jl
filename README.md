@@ -8,7 +8,7 @@ Package to compute integrals involving Bessels functions such as
 
 or Hankel transforms
 
-<img src="https://latex.codecogs.com/svg.image?F(y)=\int_{0}^{\infty}&space;\mathrm{d}x&space;f(x)&space;J_{n}(x&space;y)&space;" title="F(y)=\int_{0}^{\infty} \mathrm{d}x f(x) J_{n}(x y) " />
+<img src="https://latex.codecogs.com/svg.image?F(y)=\int_{0}^{\infty}&space;\mathrm{d}x&space;xf(x)&space;J_{n}(x&space;y)&space;" title="F(y)=\int_{0}^{\infty} \mathrm{d}x x f(x) J_{n}(x y) " />
 
 The integrals are performed using the FFTLog algorithm ([Hamilton 2000](https://arxiv.org/abs/astro-ph/9905191)).
 
@@ -53,11 +53,11 @@ Quite good, isn't it?
 Step | Status| Comment
 :------------ | :-------------| :-------------
 Integrals with a Bessel function | :white_check_mark: | Implemented, need some polishing
-Hankel Transform | :white_check_mark: | Implemented, need some polishing 
+Hankel Transforms | :white_check_mark: | Implemented, need some polishing 
 Integrals with a Bessel derivative | :construction: | WIP
 Automatic Differentiation| :construction: | WIP
 GPU compatibility| :construction: | WIP
-Integrals with multiple Bessel function| :construction: | WIP
+Integrals with multiple Bessel functions | :construction: | WIP
 
 ## Authors
 
