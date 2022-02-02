@@ -29,7 +29,7 @@ end
     FY_mul = zeros(size(FY))
     Fr_analytical = F.(Y[1,:])
     @test isapprox(Fr_analytical, FY[1,:], rtol=1e-10)
-    @test isapprox( mul!(FY_mul, FFTTest, fk), FY, rtol=1e-10)
+    @test isapprox(FY, mul!(FY_mul, FFTTest, fk), rtol=1e-10)
 end
 
 @testset "mul! operator test" begin

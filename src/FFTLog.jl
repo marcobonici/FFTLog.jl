@@ -3,10 +3,11 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
-import Base: *, \
 export mul!
 
 abstract type AbstractPlan end
+
+set_num_threads(N::Int) = FFTW.set_num_threads(N)
 
 """
     _cwindow(N::Vector{Float64}, NCut::Int64)
@@ -27,6 +28,8 @@ end
 @kwdef mutable struct FFTLogPlan <: AbstractPlan
     XArray::Vector{Float64}
     YArray::Matrix{Float64} = zeros(10,10)
+    FYArray::Matrix{Float64} = zeros(10,10)
+    HMArray::Matrix{ComplexF64} = zeros(10,10)
     HMArrayCorr::Matrix{ComplexF64} = zeros(10,10)
     DLnX::Float64 = log(XArray[2]/XArray[1])
     FYArrayCorr::Matrix{Float64} = zeros(10,10)
@@ -42,14 +45,16 @@ end
     CM::Vector{ComplexF64} = zeros(N)
     ηM::Vector{Float64} = zeros(N)
     PlanFFT::FFTW.rFFTWPlan = plan_rfft(randn(1024))
-    PlanIFFT = plan_irfft(randn(Complex{Float64},
+    PlanIFFT = plan_irfft(randn(Complex{Float64}, 2,
     Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),
-    OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)
+    OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad, 2)
 end
 
 @kwdef mutable struct HankelPlan <: AbstractPlan
     XArray::Vector{Float64}
     YArray::Matrix{Float64} = zeros(10,10)
+    FYArray::Matrix{Float64} = zeros(10,10)
+    HMArray::Matrix{ComplexF64} = zeros(10,10)
     HMArrayCorr::Matrix{ComplexF64} = zeros(10,10)
     DLnX::Float64 = log(XArray[2]/XArray[1])
     FYArrayCorr::Matrix{Float64} = zeros(10,10)
@@ -65,9 +70,9 @@ end
     CM::Vector{ComplexF64} = zeros(N)
     ηM::Vector{Float64} = zeros(N)
     PlanFFT::FFTW.rFFTWPlan = plan_rfft(randn(1024))
-    PlanIFFT = plan_irfft(randn(Complex{Float64},
+    PlanIFFT = plan_irfft(randn(Complex{Float64}, 2,
     Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),
-    OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)
+    OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad, 2)
 end
 
 function _evalcm!(plan::AbstractPlan, FXArray)
@@ -116,6 +121,8 @@ function _evaluateYArray(plan::AbstractPlan, Ell::Vector{T}) where T
         plan.YArray[myl,:] .^ (-plan.ν) .* sqrt(π) ./4
     end
 
+    plan.FYArray = zeros(size(plan.YArray))
+
     reverse!(plan.XArray)
 end
 
@@ -130,6 +137,8 @@ function _evaluateGLandHM(plan::AbstractPlan, Ell::Vector)
         (plan.XArray[1] .* plan.YArray[myl,1] ) .^ (-im .*plan.ηM)
         plan.GLArray[myl,:] = _gl(Ell[myl], ZArray)
     end
+    plan.HMArray = zeros(ComplexF64, size(plan.GLArray))
+
 end
 
 function prepareFFTLog!(plan::AbstractPlan, Ell::Vector{T}) where T
@@ -144,6 +153,9 @@ function prepareFFTLog!(plan::AbstractPlan, Ell::Vector{T}) where T
     _evaluateGLandHM(plan, Ell)
 
     plan.PlanFFT = plan_rfft(plan.XArray)
+    plan.PlanIFFT = plan_irfft(randn(Complex{Float64}, length(Ell),
+    Int((length(plan.XArray)/2) +1)),
+    plan.OriginalLenght+plan.NExtrapLow+plan.NExtrapHigh+2*plan.NPad, 2)
 end
 
 function prepareHankel!(hankplan::HankelPlan, Ell::Vector{T}) where T
@@ -155,26 +167,33 @@ function getY(plan::AbstractPlan)
 	plan.NPad+plan.OriginalLenght]
 end
 
-
 function evaluateFFTLog(plan::AbstractPlan, FXArray) where T
+    FYArray = zeros(size(getY(plan)))
+    
+    evaluateFFTLog!(FYArray, plan, FXArray)
+    
+    return FYArray
+end
+
+function evaluateFFTLog!(FYArray, plan::AbstractPlan, FXArray) where T
     FXArray = _logextrap(FXArray, plan.NExtrapLow,
 	plan.NExtrapHigh)
     FXArray = _zeropad(FXArray, plan.NPad)
     _evalcm!(plan, FXArray)
-    
-    FYArray = zeros(size(plan.YArray))
 
     @inbounds for myl in 1:length(plan.YArray[:,1])
-        HMArray = plan.CM .* @view plan.GLArray[myl,:]
-        HMArray .*= @view plan.HMArrayCorr[myl, :]
-        FYArray[myl,:] = plan.PlanIFFT * conj!(HMArray)
-        FYArray[myl,:] .*= @view plan.FYArrayCorr[myl,:]
+        plan.HMArray[myl,:] = plan.CM .* @view plan.GLArray[myl,:]
+        plan.HMArray[myl,:] .*= @view plan.HMArrayCorr[myl, :]
     end
 
-    FYArray = @view FYArray[:,plan.NExtrapLow+plan.NPad+
+    plan.FYArray[:,:] .= plan.PlanIFFT * conj!(plan.HMArray)
+    plan.FYArray[:,:] .*= @view plan.FYArrayCorr[:,:]
+
+    
+    FYArray[:,:] .= @view plan.FYArray[:,plan.NExtrapLow+plan.NPad+
 	1:plan.NExtrapLow+plan.NPad+plan.OriginalLenght]
-    return FYArray
 end
+
 
 function evaluateHankel(hankplan::HankelPlan, FXArray)
     FY = evaluateFFTLog(hankplan, FXArray .*(
@@ -184,12 +203,20 @@ function evaluateHankel(hankplan::HankelPlan, FXArray)
     return FY
 end
 
+function evaluateHankel!(FYArray, hankplan::HankelPlan, FXArray)
+    evaluateFFTLog!(FYArray, hankplan, FXArray .*(
+        hankplan.XArray[hankplan.NExtrapLow+hankplan.NPad+1:hankplan.NExtrapLow+
+	hankplan.NPad+hankplan.OriginalLenght]).^(5/2) )
+    FYArray .*= sqrt.(2*getY(hankplan)/π)
+    return FYArray
+end
+
 function mul!(Y, Q::FFTLogPlan, A)
-    Y[:,:] .= evaluateFFTLog(Q, A)
+    evaluateFFTLog!(Y, Q, A)
 end
 
 function mul!(Y, Q::HankelPlan, A)
-    Y[:,:] .= evaluateHankel(Q, A)
+    Y[:,:] .= evaluateHankel!(Y, Q, A)
 end
 
 end # module
