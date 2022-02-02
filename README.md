@@ -1,5 +1,6 @@
 # FFTLog.jl
 [![Build status (Github Actions)](https://github.com/marcobonici/FFTLog.jl/workflows/CI/badge.svg)](https://github.com/marcobonici/FFTLog.jl/actions) [![codecov](https://codecov.io/gh/marcobonici/FFTLog.jl/branch/main/graph/badge.svg?token=RCMDNON0JD)](https://codecov.io/gh/marcobonici/FFTLog.jl)
+![size](https://img.shields.io/github/repo-size/marcobonici/FFTLog.jl)
 
 Package to compute integrals involving Bessels functions such as
 
