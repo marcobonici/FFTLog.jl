@@ -55,6 +55,7 @@ Step | Status| Comment
 :------------ | :-------------| :-------------
 Integrals with a Bessel function | :white_check_mark: | Implemented, need some polishing
 Hankel Transforms | :white_check_mark: | Implemented, need some polishing 
+Multithreading | :heavy_check_mark: | Implemented
 Integrals with a Bessel derivative | :construction: | WIP
 Automatic Differentiation| :construction: | WIP
 GPU compatibility| :construction: | WIP
