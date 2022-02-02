@@ -7,6 +7,8 @@ export mul!
 
 abstract type AbstractPlan end
 
+set_num_threads(N::Int) = FFTW.set_num_threads(N)
+
 """
     _cwindow(N::Vector{Float64}, NCut::Int64)
 
@@ -164,29 +166,6 @@ function getY(plan::AbstractPlan)
     return plan.YArray[:,plan.NExtrapLow+plan.NPad+1:plan.NExtrapLow+
 	plan.NPad+plan.OriginalLenght]
 end
-
-"""
-function evaluateFFTLog(plan::AbstractPlan, FXArray) where T
-    FXArray = _logextrap(FXArray, plan.NExtrapLow,
-	plan.NExtrapHigh)
-    FXArray = _zeropad(FXArray, plan.NPad)
-    _evalcm!(plan, FXArray)
-    
-    #FYArray = zeros(size(plan.YArray))
-    HMArray = zeros(ComplexF64, size(plan.GLArray))
-    @inbounds for myl in 1:length(plan.YArray[:,1])
-        HMArray[myl,:] = plan.CM .* @view plan.GLArray[myl,:]
-        HMArray[myl,:] .*= @view plan.HMArrayCorr[myl, :]
-    end
-
-    plan.FYArray[:,:] .= plan.PlanIFFT * conj!(HMArray)
-    plan.FYArray[:,:] .*= @view plan.FYArrayCorr[:,:]
-
-    
-    return @view plan.FYArray[:,plan.NExtrapLow+plan.NPad+
-	1:plan.NExtrapLow+plan.NPad+plan.OriginalLenght]
-end
-"""
 
 function evaluateFFTLog(plan::AbstractPlan, FXArray) where T
     FYArray = zeros(size(getY(plan)))
