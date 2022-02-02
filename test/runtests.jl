@@ -17,6 +17,7 @@ function LogSpaced(min::T, max::T, n::I) where {T,I}
 end
 
 @testset "Analytical Hankel test" begin
+    FFTLog.set_num_threads(Threads.nthreads())
     k = LogSpaced(10^(-5), 10., 2^10)
     fk = f.(k)
     FFTTest = FFTLog.HankelPlan(XArray = k, NExtrapLow = 1500, ν=1.01, NExtrapHigh = 1500,
