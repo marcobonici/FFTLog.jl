@@ -40,6 +40,7 @@ end
     NExtrapHigh::Int64 = 0
     CWindowWidth::Float64 = 0.25
     NPad::Int64 = 0
+    n::Int64 = 0
     N::Int64 = OriginalLenght+NExtrapHigh+NExtrapLow+2*NPad
     M::Vector{Float64} = zeros(N)
     CM::Vector{ComplexF64} = zeros(N)
@@ -65,6 +66,7 @@ end
     NExtrapHigh::Int64 = 0
     CWindowWidth::Float64 = 0.25
     NPad::Int64 = 0
+    n::Int64 = 0
     N::Int64 = OriginalLenght+NExtrapHigh+NExtrapLow+2*NPad
     M::Vector{Float64} = zeros(N)
     CM::Vector{ComplexF64} = zeros(N)
@@ -85,8 +87,14 @@ function _evalηm!(plan::AbstractPlan)
     return plan.ηM
 end
 
-function _gl(Ell::Float64, ZArray::Vector{ComplexF64})
-    GL = 2 .^ ZArray .* gamma.((Ell .+ ZArray)/2) ./ gamma.((3 .+ Ell .- ZArray)/2)
+function _gl(Ell::Float64, ZArray::Vector{ComplexF64}, n::Int)
+    GL = ((-1)^n) .* 2 .^ (ZArray .-n) .* gamma.((Ell .+ ZArray .- n)/2) ./
+    gamma.((3 .+ Ell .+ n .- ZArray)/2)
+    if n != 0
+        for i in 1:n
+            GL .*= (ZArray-i)
+        end
+    end
     return GL
 end
 
@@ -135,7 +143,7 @@ function _evaluateGLandHM(plan::AbstractPlan, Ell::Vector)
     @inbounds for myl in 1:length(Ell)
         plan.HMArrayCorr[myl,:] =
         (plan.XArray[1] .* plan.YArray[myl,1] ) .^ (-im .*plan.ηM)
-        plan.GLArray[myl,:] = _gl(Ell[myl], ZArray)
+        plan.GLArray[myl,:] = _gl(Ell[myl], ZArray, plan.n)
     end
     plan.HMArray = zeros(ComplexF64, size(plan.GLArray))
 
