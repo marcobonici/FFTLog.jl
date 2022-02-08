@@ -28,7 +28,7 @@ Since we know the analytical transform, we can perform a check
 
 1. Instantiate an object `HankelPlan`
 ```julia
-HankelTest = FFTLog.HankelPlan(XArray = k)
+HankelTest = FFTLog.HankelPlan(x = k)
 ```
 2. Perform some precomputations
 ```julia
