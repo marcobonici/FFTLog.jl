@@ -97,15 +97,15 @@ function _eval_ηm!(plan::AbstractPlan)
     #TODO: #9 since we know the length of the initial array, we could use this info here to
     #remove the necessity of DLnX
     plan.ηm = 2 .* π ./ (plan.N .* plan.d_ln_x) .* plan.m
-    return plan.ηm
+    #return plan.ηm
 end
 
-function _gl(ell, z::Vector, n::Int)
+function _eval_gl(ell, z::Vector, n::Int)
     gl = ((-1)^n) .* 2 .^ (z .-n) .* gamma.((ell .+ z .- n)/2) ./
     gamma.((3 .+ ell .+ n .- z)/2)
     if n != 0
         for i in 1:n
-            gl .*= (z-i)
+            gl .*= (z .- i)
         end
     end
     return gl
@@ -158,7 +158,7 @@ function evaluate_gl_hm(plan::AbstractPlan, ell::Vector)
     @inbounds for myl in 1:length(ell)
         plan.hm_corr[myl,:] =
         (plan.x[1] .* plan.y[myl,1] ) .^ (-im .*plan.ηm)
-        plan.gl[myl,:] = _gl(ell[myl], z, plan.n)
+        plan.gl[myl,:] = _eval_gl(ell[myl], z, plan.n)
     end
     plan.hm = zeros(ComplexF64, size(plan.gl))
 
