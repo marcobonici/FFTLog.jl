@@ -10,12 +10,12 @@ abstract type AbstractPlan end
 set_num_threads(N::Int) = FFTW.set_num_threads(N)
 
 """
-    _cwindow(N::Vector{Float64}, NCut::Int64)
+    _cwindow(N::AbstractArray, NCut::Int)
 
 This function returns the smoothing window function as defined
 in Eq. (C.1) of [McEwen et al. (2016)](https://arxiv.org/abs/1603.04826).
 """
-function _cwindow(N::AbstractArray{T}, NCut::I) where {T,I}
+function _cwindow(N::AbstractArray, NCut::Int)
     NRight = last(N) - NCut
     NR = filter(x->x>=NRight, N)
     ThetaRight = (last(N).-NR) ./ (last(N) - NRight - 1)
@@ -25,52 +25,52 @@ function _cwindow(N::AbstractArray{T}, NCut::I) where {T,I}
     return W
 end
 
-@kwdef mutable struct FFTLogPlan <: AbstractPlan
-    XArray::Vector{Float64}
-    YArray::Matrix{Float64} = zeros(10,10)
-    FYArray::Matrix{Float64} = zeros(10,10)
-    HMArray::Matrix{ComplexF64} = zeros(10,10)
-    HMArrayCorr::Matrix{ComplexF64} = zeros(10,10)
-    DLnX::Float64 = log(XArray[2]/XArray[1])
-    FYArrayCorr::Matrix{Float64} = zeros(10,10)
-    OriginalLenght::Int64 = length(XArray)
-    GLArray::Matrix{ComplexF64} = zeros(100,100)
-    ν::Float64 = 1.01
-    NExtrapLow::Int64 = 0
-    NExtrapHigh::Int64 = 0
-    CWindowWidth::Float64 = 0.25
-    NPad::Int64 = 0
-    n::Int64 = 0
-    N::Int64 = OriginalLenght+NExtrapHigh+NExtrapLow+2*NPad
-    M::Vector{Float64} = zeros(N)
-    CM::Vector{ComplexF64} = zeros(N)
-    ηM::Vector{Float64} = zeros(N)
+@kwdef mutable struct FFTLogPlan{T,C} <: AbstractPlan 
+    XArray::Vector{T}
+    YArray::Matrix{T} = zeros(10,10)
+    FYArray::Matrix{T} = zeros(10,10)
+    HMArray::Matrix{C} = zeros(10,10) .+im
+    HMArrayCorr::Matrix{C} = zeros(10,10) .+im
+    DLnX::T = log(XArray[2]/XArray[1])
+    FYArrayCorr::Matrix{T} = zeros(10,10)
+    OriginalLenght::Int = length(XArray)
+    GLArray::Matrix{C} = zeros(100,100) .+im
+    ν::T = 1.01
+    NExtrapLow::Int = 0
+    NExtrapHigh::Int = 0
+    CWindowWidth::T = 0.25
+    NPad::Int = 0
+    n::Int = 0
+    N::Int = OriginalLenght+NExtrapHigh+NExtrapLow+2*NPad
+    M::Vector{T} = zeros(N)
+    CM::Vector{C} = zeros(N) .+im
+    ηM::Vector{T} = zeros(N)
     PlanFFT::FFTW.rFFTWPlan = plan_rfft(randn(1024))
     PlanIFFT = plan_irfft(randn(Complex{Float64}, 2,
     Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),
     OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad, 2)
 end
 
-@kwdef mutable struct HankelPlan <: AbstractPlan
-    XArray::Vector{Float64}
-    YArray::Matrix{Float64} = zeros(10,10)
-    FYArray::Matrix{Float64} = zeros(10,10)
-    HMArray::Matrix{ComplexF64} = zeros(10,10)
-    HMArrayCorr::Matrix{ComplexF64} = zeros(10,10)
-    DLnX::Float64 = log(XArray[2]/XArray[1])
-    FYArrayCorr::Matrix{Float64} = zeros(10,10)
-    OriginalLenght::Int64 = length(XArray)
-    GLArray::Matrix{ComplexF64} = zeros(100,100)
-    ν::Float64 = 1.01
-    NExtrapLow::Int64 = 0
-    NExtrapHigh::Int64 = 0
-    CWindowWidth::Float64 = 0.25
-    NPad::Int64 = 0
-    n::Int64 = 0
-    N::Int64 = OriginalLenght+NExtrapHigh+NExtrapLow+2*NPad
-    M::Vector{Float64} = zeros(N)
-    CM::Vector{ComplexF64} = zeros(N)
-    ηM::Vector{Float64} = zeros(N)
+@kwdef mutable struct HankelPlan{T,C} <: AbstractPlan
+    XArray::Vector{T}
+    YArray::Matrix{T} = zeros(10,10)
+    FYArray::Matrix{T} = zeros(10,10)
+    HMArray::Matrix{C} = zeros(10,10) .+im
+    HMArrayCorr::Matrix{C} = zeros(10,10) .+im
+    DLnX::T = log(XArray[2]/XArray[1])
+    FYArrayCorr::Matrix{T} = zeros(10,10)
+    OriginalLenght::Int = length(XArray)
+    GLArray::Matrix{C} = zeros(100,100) .+im
+    ν::T = 1.01
+    NExtrapLow::Int = 0
+    NExtrapHigh::Int = 0
+    CWindowWidth::T = 0.25
+    NPad::Int = 0
+    n::Int = 0
+    N::Int = OriginalLenght+NExtrapHigh+NExtrapLow+2*NPad
+    M::Vector{T} = zeros(N)
+    CM::Vector{C} = zeros(N) .+im
+    ηM::Vector{T} = zeros(N)
     PlanFFT::FFTW.rFFTWPlan = plan_rfft(randn(1024))
     PlanIFFT = plan_irfft(randn(Complex{Float64}, 2,
     Int((OriginalLenght+NExtrapLow+NExtrapHigh+2*NPad)/2) +1),
@@ -83,11 +83,13 @@ function _evalcm!(plan::AbstractPlan, FXArray)
 end
 
 function _evalηm!(plan::AbstractPlan)
+    #TODO: #9 since we know the length of the initial array, we could use this info here to
+    #remove the necessity of DLnX
     plan.ηM = 2 .* π ./ (plan.N .* plan.DLnX) .* plan.M
     return plan.ηM
 end
 
-function _gl(Ell::Float64, ZArray::Vector{ComplexF64}, n::Int)
+function _gl(Ell, ZArray::Vector, n::Int)
     GL = ((-1)^n) .* 2 .^ (ZArray .-n) .* gamma.((Ell .+ ZArray .- n)/2) ./
     gamma.((3 .+ Ell .+ n .- ZArray)/2)
     if n != 0
@@ -98,7 +100,7 @@ function _gl(Ell::Float64, ZArray::Vector{ComplexF64}, n::Int)
     return GL
 end
 
-function _logextrap(X::Vector{Float64}, NExtrapLow::Int64, NExtrapHigh::Int64)
+function _logextrap(X::Vector, NExtrapLow::Int, NExtrapHigh::Int)
     DLnXLow = log(X[2]/X[1])
     DLnXHigh= log(reverse(X)[1]/reverse(X)[2])
     if NExtrapLow != 0
@@ -112,12 +114,12 @@ function _logextrap(X::Vector{Float64}, NExtrapLow::Int64, NExtrapHigh::Int64)
     return X
 end
 
-function _zeropad(X::Vector{Float64}, NPad::Int)
+function _zeropad(X::Vector, NPad::Int)
     ZeroArray = zeros(NPad)
     return vcat(ZeroArray, X, ZeroArray)
 end
 
-function _evaluateYArray(plan::AbstractPlan, Ell::Vector{T}) where T
+function _evaluateYArray(plan::AbstractPlan, Ell::Vector)
     reverse!(plan.XArray)
 
     plan.YArray = zeros(length(Ell), length(plan.XArray))
@@ -149,7 +151,7 @@ function _evaluateGLandHM(plan::AbstractPlan, Ell::Vector)
 
 end
 
-function prepareFFTLog!(plan::AbstractPlan, Ell::Vector{T}) where T
+function prepareFFTLog!(plan::AbstractPlan, Ell::Vector)
     plan.XArray = _logextrap(plan.XArray, plan.NExtrapLow + plan.NPad,
 	plan.NExtrapHigh + plan.NPad)
     
@@ -166,7 +168,7 @@ function prepareFFTLog!(plan::AbstractPlan, Ell::Vector{T}) where T
     plan.OriginalLenght+plan.NExtrapLow+plan.NExtrapHigh+2*plan.NPad, 2)
 end
 
-function prepareHankel!(hankplan::HankelPlan, Ell::Vector{T}) where T
+function prepareHankel!(hankplan::HankelPlan, Ell::Vector)
     prepareFFTLog!(hankplan, Ell .-0.5)
 end
 
@@ -175,7 +177,7 @@ function getY(plan::AbstractPlan)
 	plan.NPad+plan.OriginalLenght]
 end
 
-function evaluateFFTLog(plan::AbstractPlan, FXArray) where T
+function evaluateFFTLog(plan::AbstractPlan, FXArray)
     FYArray = zeros(size(getY(plan)))
     
     evaluateFFTLog!(FYArray, plan, FXArray)
@@ -183,7 +185,7 @@ function evaluateFFTLog(plan::AbstractPlan, FXArray) where T
     return FYArray
 end
 
-function evaluateFFTLog!(FYArray, plan::AbstractPlan, FXArray) where T
+function evaluateFFTLog!(FYArray, plan::AbstractPlan, FXArray)
     FXArray = _logextrap(FXArray, plan.NExtrapLow,
 	plan.NExtrapHigh)
     FXArray = _zeropad(FXArray, plan.NPad)
