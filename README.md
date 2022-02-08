@@ -1,6 +1,9 @@
 # FFTLog.jl
-[![Build status (Github Actions)](https://github.com/marcobonici/FFTLog.jl/workflows/CI/badge.svg)](https://github.com/marcobonici/FFTLog.jl/actions) [![codecov](https://codecov.io/gh/marcobonici/FFTLog.jl/branch/main/graph/badge.svg?token=RCMDNON0JD)](https://codecov.io/gh/marcobonici/FFTLog.jl)
+[![Build status (Github Actions)](https://github.com/marcobonici/FFTLog.jl/workflows/CI/badge.svg)](https://github.com/marcobonici/FFTLog.jl/actions)
+[![codecov](https://codecov.io/gh/marcobonici/FFTLog.jl/branch/main/graph/badge.svg?token=RCMDNON0JD)](https://codecov.io/gh/marcobonici/FFTLog.jl)
 ![size](https://img.shields.io/github/repo-size/marcobonici/FFTLog.jl)
+[![Code Style: Blue](https://img.shields.io/badge/code%20style-blue-4495d1.svg)](https://github.com/invenia/BlueStyle)
+[![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
 
 Package to compute integrals involving Bessels functions such as
 
@@ -25,19 +28,19 @@ Since we know the analytical transform, we can perform a check
 
 1. Instantiate an object `HankelPlan`
 ```julia
-HankelTest = FFTLog.HankelPlan(XArray = k)
+HankelTest = FFTLog.HankelPlan(x = k)
 ```
 2. Perform some precomputations
 ```julia
-FFTLog.PrepareHankel!(HankelTest, Ell)
+prepare_Hankel!(HankelTest, Ell)
 ```
 3. Compute the Hankel transform
 ```julia
-Fy = FFTLog.evaluateHankel(HankelTest, Pk)
+Fy = evaluate_Hankel(HankelTest, Pk)
 ```
 4. If needed, the array `y` (the counterpart of the array `r`) can be obtained with
 ```julia
-y = FFTlog.getY(HankelTest)
+y = get_y(HankelTest)
 ```
 Now, let us compare the numerical and the analytical transforms
 
@@ -56,7 +59,7 @@ Step | Status| Comment
 Integrals with a Bessel function | :white_check_mark: | Implemented, need some polishing
 Hankel Transforms | :white_check_mark: | Implemented, need some polishing 
 Multithreading | :heavy_check_mark: | Implemented
-Integrals with a Bessel derivative | :construction: | WIP
+Integrals with a Bessel derivative | :heavy_check_mark: | Implemented
 Automatic Differentiation| :construction: | WIP
 GPU compatibility| :construction: | WIP
 Integrals with multiple Bessel functions | :construction: | WIP
