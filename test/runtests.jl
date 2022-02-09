@@ -56,7 +56,7 @@ Pk = read_file[:,2]
     Ell = Array([0., 2.])
     FFTLog.prepare_Hankel!(FFTTest, Ell)
     Y = FFTLog.get_y(FFTTest)
-    FY = FFTLog.evaluate_Hankel(FFTTest, Pk)
+    FY = FFTLog.evaluate_Hankel(FFTTest, Pk.*(k.^(-2)))
     Fr = npzread(input_path*"check_by_hank_Fr.py.npy")
     r = npzread(input_path*"check_by_hank_r.py.npy")
     @test isapprox(Fr, FY[1,:], rtol=1e-8)
