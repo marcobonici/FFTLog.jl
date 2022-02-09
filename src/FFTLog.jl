@@ -114,19 +114,15 @@ function _logextrap(x::Vector, n_extrap_low::Int, n_extrap_high::Int)
     d_ln_x_low = log(x[2]/x[1])
     d_ln_x_high= log(reverse(x)[1]/reverse(x)[2])
     if n_extrap_low != 0
-        #TODO: check if you can directly vcat the array!
-        low_x = x[1] .* exp.(d_ln_x_low .* Array(-n_extrap_low:-1))
-        X = vcat(low_x, x)
+        X = vcat(x[1] .* exp.(d_ln_x_low .* Array(-n_extrap_low:-1)), x)
     end
     if n_extrap_high != 0
-        high_x = last(X) .* exp.(d_ln_x_high .* Array(1:n_extrap_high))
-        X = vcat(X, high_x)
+        X = vcat(X, last(X) .* exp.(d_ln_x_high .* Array(1:n_extrap_high)))
     end
     return X
 end
 
 function _zeropad(x::Vector, n_pad::Int)
-    #TODO: check if you can directly vcat the array!
     return vcat(zeros(n_pad), x, zeros(n_pad))
 end
 
