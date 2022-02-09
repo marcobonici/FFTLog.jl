@@ -57,8 +57,8 @@ Quite good, isn't it?
 
 Step | Status| Comment
 :------------ | :-------------| :-------------
-Integrals with a Bessel function | :white_check_mark: | Implemented, need some polishing
-Hankel Transforms | :white_check_mark: | Implemented, need some polishing 
+Integrals with a Bessel function | :white_check_mark: | Implemented, needs some polishing
+Hankel Transforms | :white_check_mark: | Implemented, needs some polishing 
 Multithreading | :heavy_check_mark: | Implemented
 Integrals with a Bessel derivative | :heavy_check_mark: | Implemented
 Automatic Differentiation| :construction: | WIP
