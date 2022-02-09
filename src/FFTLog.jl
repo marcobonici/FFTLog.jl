@@ -92,12 +92,10 @@ function _eval_cm!(plan::AbstractPlan, fx)
     plan.cm .*= _c_window(plan.m, floor(Int, plan.c_window_width*plan.N/2))
 end
 
-#TODO: adjust definition, not mutating function!
 function _eval_ηm!(plan::AbstractPlan)
     #TODO: #9 since we know the length of the initial array, we could use this info here to
     #remove the necessity of DLnX
     plan.ηm = 2 .* π ./ (plan.N .* plan.d_ln_x) .* plan.m
-    #return plan.ηm
 end
 
 function _eval_gl(ell, z::Vector, n::Int)
@@ -132,7 +130,7 @@ function _zeropad(x::Vector, n_pad::Int)
     return vcat(zeros_array, x, zeros_array)
 end
 
-function _evaluate_y(plan::AbstractPlan, ell::Vector)
+function _eval_y(plan::AbstractPlan, ell::Vector)
     reverse!(plan.x)
 
     plan.y = zeros(length(ell), length(plan.x))
@@ -149,7 +147,7 @@ function _evaluate_y(plan::AbstractPlan, ell::Vector)
     reverse!(plan.x)
 end
 
-function evaluate_gl_hm(plan::AbstractPlan, ell::Vector)
+function eval_gl_hm(plan::AbstractPlan, ell::Vector)
     z = plan.ν .+ im .* plan.ηm
     plan.gl = zeros(length(ell), length(z))
 
@@ -168,12 +166,12 @@ function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
     plan.x = _logextrap(plan.x, plan.n_extrap_low + plan.n_pad,
 	plan.n_extrap_high + plan.n_pad)
 
-    _evaluate_y(plan, ell)
+    _eval_y(plan, ell)
 
     plan.m = Array(0:length(plan.x)/2)
     _eval_ηm!(plan)
 
-    evaluate_gl_hm(plan, ell)
+    eval_gl_hm(plan, ell)
 
     plan.plan_rfft = plan_rfft(plan.x)
     plan.plan_irfft = plan_irfft(randn(Complex{Float64}, length(ell),
