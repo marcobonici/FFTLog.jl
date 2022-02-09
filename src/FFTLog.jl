@@ -3,6 +3,7 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
+import Base: *
 
 export prepare_FFTLog!, evaluate_FFTLog, evaluate_FFTLog!
 export prepare_Hankel!, evaluate_Hankel, evaluate_Hankel!
@@ -39,12 +40,12 @@ This struct contains all the elements necessary to evaluate the integral with on
     x::Vector{T}
     y::Matrix{T} = zeros(10,10)
     fy::Matrix{T} = zeros(10,10)
-    hm::Matrix{C} = zeros(10,10) .+im
-    hm_corr::Matrix{C} = zeros(10,10) .+im
+    hm::Matrix{C} = zeros(ComplexF64,10,10)
+    hm_corr::Matrix{C} = zeros(ComplexF64,10,10)
     d_ln_x::T = log(x[2]/x[1])
     fy_corr::Matrix{T} = zeros(10,10)
     original_length::Int = length(x)
-    gl::Matrix{C} = zeros(100,100) .+im
+    gl::Matrix{C} = zeros(ComplexF64,100,100)
     ν::T = 1.01
     n_extrap_low::Int = 0
     n_extrap_high::Int = 0
@@ -53,7 +54,7 @@ This struct contains all the elements necessary to evaluate the integral with on
     n::Int = 0
     N::Int = original_length+n_extrap_low+n_extrap_high+2*n_pad
     m::Vector{T} = zeros(N)
-    cm::Vector{C} = zeros(N) .+im
+    cm::Vector{C} = zeros(ComplexF64,N)
     ηm::Vector{T} = zeros(N)
     plan_rfft::FFTW.rFFTWPlan = plan_rfft(randn(1024))
     plan_irfft = plan_irfft(randn(Complex{Float64}, 2,
@@ -65,12 +66,12 @@ end
     x::Vector{T}
     y::Matrix{T} = zeros(10,10)
     fy::Matrix{T} = zeros(10,10)
-    hm::Matrix{C} = zeros(10,10) .+im
-    hm_corr::Matrix{C} = zeros(10,10) .+im
+    hm::Matrix{C} = zeros(ComplexF64,10,10)
+    hm_corr::Matrix{C} = zeros(ComplexF64,10,10)
     d_ln_x::T = log(x[2]/x[1])
     fy_corr::Matrix{T} = zeros(10,10)
     original_length::Int = length(x)
-    gl::Matrix{C} = zeros(100,100) .+im
+    gl::Matrix{C} = zeros(ComplexF64,100,100)
     ν::T = 1.01
     n_extrap_low::Int = 0
     n_extrap_high::Int = 0
@@ -79,7 +80,7 @@ end
     n::Int = 0
     N::Int = original_length+n_extrap_low+n_extrap_high+2*n_pad
     m::Vector{T} = zeros(N)
-    cm::Vector{C} = zeros(N) .+im
+    cm::Vector{C} = zeros(ComplexF64,N)
     ηm::Vector{T} = zeros(N)
     plan_rfft::FFTW.rFFTWPlan = plan_rfft(randn(1024))
     plan_irfft = plan_irfft(randn(Complex{Float64}, 2,
@@ -126,11 +127,11 @@ end
 
 function _zeropad(x::Vector, n_pad::Int)
     #TODO: check if you can directly vcat the array!
-    zeros_array = zeros(n_pad)
-    return vcat(zeros_array, x, zeros_array)
+    return vcat(zeros(n_pad), x, zeros(n_pad))
 end
 
-function _eval_y(plan::AbstractPlan, ell::Vector)
+
+function _eval_y!(plan::AbstractPlan, ell::Vector)
     reverse!(plan.x)
 
     plan.y = zeros(length(ell), length(plan.x))
@@ -147,7 +148,7 @@ function _eval_y(plan::AbstractPlan, ell::Vector)
     reverse!(plan.x)
 end
 
-function eval_gl_hm(plan::AbstractPlan, ell::Vector)
+function _eval_gl_hm!(plan::AbstractPlan, ell::Vector)
     z = plan.ν .+ im .* plan.ηm
     plan.gl = zeros(length(ell), length(z))
 
@@ -164,14 +165,14 @@ end
 
 function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
     plan.x = _logextrap(plan.x, plan.n_extrap_low + plan.n_pad,
-	plan.n_extrap_high + plan.n_pad)
+	  plan.n_extrap_high + plan.n_pad)
 
-    _eval_y(plan, ell)
+    _eval_y!(plan, ell)
 
     plan.m = Array(0:length(plan.x)/2)
     _eval_ηm!(plan)
 
-    eval_gl_hm(plan, ell)
+    _eval_gl_hm!(plan, ell)
 
     plan.plan_rfft = plan_rfft(plan.x)
     plan.plan_irfft = plan_irfft(randn(Complex{Float64}, length(ell),
@@ -184,16 +185,13 @@ function prepare_Hankel!(hankplan::HankelPlan, ell::Vector)
 end
 
 function get_y(plan::AbstractPlan)
-    #TODO: check this n_extrap_low
     return plan.y[:,plan.n_extrap_low+plan.n_pad+1:plan.n_extrap_low+
 	plan.n_pad+plan.original_length]
 end
 
 function evaluate_FFTLog(plan::AbstractPlan, fx)
-    fy = zeros(size(get_y(plan)))
-
+    fy = similar(get_y(plan))
     evaluate_FFTLog!(fy, plan, fx)
-
     return fy
 end
 
@@ -211,7 +209,6 @@ function evaluate_FFTLog!(fy, plan::AbstractPlan, fx)
     plan.fy[:,:] .= plan.plan_irfft * conj!(plan.hm)
     plan.fy[:,:] .*= @view plan.fy_corr[:,:]
 
-    #TODO: check if this is really n_extrap_low!
     fy[:,:] .= @view plan.fy[:,plan.n_extrap_low+plan.n_pad+
 	1:plan.n_extrap_low+plan.n_pad+plan.original_length]
 end
@@ -226,7 +223,6 @@ function evaluate_Hankel(hankplan::HankelPlan, fx)
 end
 
 function evaluate_Hankel!(fy, hankplan::HankelPlan, fx)
-    #TODO: check if this is really n_extrap_low!
     evaluate_FFTLog!(fy, hankplan, fx .*(
         hankplan.x[hankplan.n_extrap_low+hankplan.n_pad+1:hankplan.n_extrap_low+
 	hankplan.n_pad+hankplan.original_length]).^(5/2) )
@@ -240,6 +236,14 @@ end
 
 function mul!(Y, Q::HankelPlan, A)
     Y[:,:] .= evaluate_Hankel!(Y, Q, A)
+end
+
+function *(Q::FFTLogPlan, A)
+    evaluate_FFTLog(Q, A)
+end
+
+function *(Q::HankelPlan, A)
+    evaluate_Hankel(Q, A)
 end
 
 end # module
