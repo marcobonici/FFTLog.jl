@@ -3,6 +3,7 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
+using ChainRulesCore
 import Base: *
 
 export prepare_FFTLog!, evaluate_FFTLog, evaluate_FFTLog!
@@ -241,5 +242,7 @@ end
 function *(Q::HankelPlan, A)
     evaluate_Hankel(Q, A)
 end
+
+ChainRulesCore.frule((_, _, ΔA), ::typeof(*), Q::AbstractPlan, A) = (Q * A, Q * unthunk(ΔA))
 
 end # module
