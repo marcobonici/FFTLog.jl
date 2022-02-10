@@ -2,6 +2,7 @@ using FFTLog
 using Test
 using DelimitedFiles
 using NPZ
+using ChainRulesCore
 
 run(`wget https://zenodo.org/record/6021744/files/test_FFTLog.tar.xz\?download=1`)
 run(`mv test_FFTLog.tar.xz\?download=1 test_FFTLog.tar.xz`)
@@ -65,11 +66,19 @@ end
 
 
 
-function f(k, a=1)
+function f(k, a)
     return exp(-k^2.0 *a^2 / 2)
 end
 
-function F(r, a=1)
+function ∂f(k, a)
+    return exp(-k^2.0 *a^2 / 2) * (-k^2 *a)
+end
+
+function ChainRulesCore.frule((_, _, Δx), ::typeof(f), x::Number, a::Number)
+    return (f(x,a), ∂f(x,a) * Δx)
+end
+
+function F(r, a)
     return exp(- r^2.0 / (2. *a^2))
 end
 
@@ -83,7 +92,7 @@ end
 @testset "Analytical Hankel test" begin
     FFTLog.set_num_threads(Threads.nthreads())
     k = LogSpaced(10^(-5), 10., 2^10)
-    fk = f.(k)
+    fk = f.(k, 1)
     FFTTest = FFTLog.HankelPlan(x = k, n_extrap_low = 1500, ν=1.01, n_extrap_high = 1500,
     n_pad = 500)
     Ell = Array([0.])
@@ -92,7 +101,7 @@ end
     FY = zeros(size(Y));
     FY = evaluate_Hankel(FFTTest, fk)
     FY_mul = zeros(size(FY))
-    Fr_analytical = F.(Y[1,:])
+    Fr_analytical = F.(Y[1,:], 1)
     @test isapprox(Fr_analytical, FY[1,:], rtol=1e-10)
     @test isapprox(FY, mul!(FY_mul, FFTTest, fk), rtol=1e-10)
     @test isapprox(FY, FFTTest*fk, rtol=1e-10)
@@ -100,7 +109,7 @@ end
 
 @testset "mul! operator test" begin
     k = LogSpaced(10^(-5), 10., 2^10)
-    fk = f.(k)
+    fk = f.(k,1)
     FFTTest = FFTLog.FFTLogPlan(x = k, n_extrap_low = 1500, ν=1.01, n_extrap_high = 1500,
     n_pad = 500)
     Ell = Array([0.])
@@ -113,4 +122,17 @@ end
     mul!(FY_mul, FFTTest, fk_k2)
     @test isapprox(FY_mul, FY, rtol=1e-10)
     @test isapprox(FY_mul, FFTTest*fk_k2, rtol=1e-10)
+end
+
+@testset "Differentiability test" begin
+    k = LogSpaced(10^(-5), 10., 2^10)
+    FFTTest = FFTLog.HankelPlan(x = k, n_extrap_low = 1500, ν=1.01, n_extrap_high = 1500,
+    n_pad = 500)
+    fk = f.(k,1)
+    Ell = Array([0.])
+    prepare_Hankel!(FFTTest, Ell)
+    ∂fk = ∂f.(k,1)
+    Fr, ∂Fr = FFTLog.frule((ZeroTangent(), ZeroTangent(), ∂fk), *, FFTTest, fk)
+    @test Fr == FFTTest * fk
+    @test ∂Fr == FFTTest * ∂fk
 end
