@@ -63,7 +63,8 @@ Multithreading | :heavy_check_mark: | Implemented
 Integrals with a Bessel derivative | :heavy_check_mark: | Implemented
 Automatic Differentiation| :construction: | WIP
 GPU compatibility| :construction: | WIP
-Integrals with multiple Bessel functions | :construction: | WIP
+Integrals with two Bessel functions | :construction: | WIP
+Python wrapper | :construction: | WIP
 
 ## Authors
 
