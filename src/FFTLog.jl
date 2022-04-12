@@ -5,8 +5,8 @@ using Base: @kwdef
 using SpecialFunctions: gamma
 import Base: *
 
-export prepare_FFTLog!, evaluate_FFTLog, evaluate_FFTLog!
-export prepare_Hankel!, evaluate_Hankel, evaluate_Hankel!
+export prepare_FFTLog!, evaluate_FFTLog, evaluate_FFTLog!, FFTLogPlan
+export prepare_Hankel!, evaluate_Hankel, evaluate_Hankel!, HankelPlan
 export mul!
 export get_y
 
@@ -25,8 +25,7 @@ function _c_window(N::AbstractArray, NCut::Int)
     NR = filter(x->x>=NRight, N)
     ThetaRight = (last(N).-NR) ./ (last(N) - NRight - 1)
     W = ones(length(N))
-    W[findall(x->x>=NRight, N)] = ThetaRight .- 1 ./ (2*π) .* sin.(2 .* π .*
-	ThetaRight)
+    W[findall(x->x>=NRight, N)] = ThetaRight .- 1 ./ (2*π) .* sin.(2 .* π .* ThetaRight)
     return W
 end
 
@@ -34,10 +33,11 @@ end
 """
     FFTLogPlan()
 
-This struct contains all the elements necessary to evaluate the integral with one Bessel function.
+This struct contains all the elements necessary to evaluate instegrals with one Bessel
+function.
 """
 @kwdef mutable struct FFTLogPlan{T,C} <: AbstractPlan
-    x::Vector{T}
+    x::AbstractArray
     y::Matrix{T} = zeros(10,10)
     fy::Matrix{T} = zeros(10,10)
     hm::Matrix{C} = zeros(ComplexF64,10,10)
@@ -62,8 +62,13 @@ This struct contains all the elements necessary to evaluate the integral with on
     original_length+n_extrap_low+n_extrap_high+2*n_pad, 2)
 end
 
+"""
+    HankelPlan()
+
+This struct contains all the elements necessary to evaluate the Hankel transform.
+"""
 @kwdef mutable struct HankelPlan{T,C} <: AbstractPlan
-    x::Vector{T}
+    x::AbstractArray
     y::Matrix{T} = zeros(10,10)
     fy::Matrix{T} = zeros(10,10)
     hm::Matrix{C} = zeros(ComplexF64,10,10)
@@ -99,7 +104,7 @@ function _eval_ηm!(plan::AbstractPlan)
     plan.ηm = 2 .* π ./ (plan.N .* plan.d_ln_x) .* plan.m
 end
 
-function _eval_gl(ell, z::Vector, n::Int)
+function _eval_gl(ell, z::AbstractVector, n::Int)
     gl = ((-1)^n) .* 2 .^ (z .-n) .* gamma.((ell .+ z .- n)/2) ./
     gamma.((3 .+ ell .+ n .- z)/2)
     if n != 0
@@ -110,9 +115,10 @@ function _eval_gl(ell, z::Vector, n::Int)
     return gl
 end
 
-function _logextrap(x::Vector, n_extrap_low::Int, n_extrap_high::Int)
+function _logextrap(x::AbstractArray, n_extrap_low::Int, n_extrap_high::Int)
     d_ln_x_low = log(x[2]/x[1])
     d_ln_x_high= log(reverse(x)[1]/reverse(x)[2])
+    X = deepcopy(x)
     if n_extrap_low != 0
         X = vcat(x[1] .* exp.(d_ln_x_low .* Array(-n_extrap_low:-1)), x)
     end
@@ -122,12 +128,12 @@ function _logextrap(x::Vector, n_extrap_low::Int, n_extrap_high::Int)
     return X
 end
 
-function _zeropad(x::Vector, n_pad::Int)
+function _zeropad(x::AbstractVector, n_pad::Int)
     return vcat(zeros(n_pad), x, zeros(n_pad))
 end
 
 
-function _eval_y!(plan::AbstractPlan, ell::Vector)
+function _eval_y!(plan::AbstractPlan, ell::AbstractArray)
     reverse!(plan.x)
 
     plan.y = zeros(length(ell), length(plan.x))
@@ -144,7 +150,7 @@ function _eval_y!(plan::AbstractPlan, ell::Vector)
     reverse!(plan.x)
 end
 
-function _eval_gl_hm!(plan::AbstractPlan, ell::Vector)
+function _eval_gl_hm!(plan::AbstractPlan, ell::AbstractVector)
     z = plan.ν .+ im .* plan.ηm
     plan.gl = zeros(length(ell), length(z))
 
@@ -159,7 +165,7 @@ function _eval_gl_hm!(plan::AbstractPlan, ell::Vector)
 
 end
 
-function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
+function prepare_FFTLog!(plan::AbstractPlan, ell::AbstractVector)
     plan.x = _logextrap(plan.x, plan.n_extrap_low + plan.n_pad,
 	  plan.n_extrap_high + plan.n_pad)
 
@@ -173,11 +179,11 @@ function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
     plan.plan_rfft = plan_rfft(plan.x)
     plan.plan_irfft = plan_irfft(randn(Complex{Float64}, length(ell),
     Int((length(plan.x)/2) +1)),
-    plan.original_length+plan.n_extrap_low+plan.n_extrap_high+2*plan.n_pad, 2)
+    plan.original_length+plan.n_extrap_low+plan.n_extrap_high+2*plan.n_pad, 2);
 end
 
-function prepare_Hankel!(hankplan::HankelPlan, ell::Vector)
-    prepare_FFTLog!(hankplan, ell .-0.5)
+function prepare_Hankel!(hankplan::HankelPlan, ell::AbstractVector)
+    prepare_FFTLog!(hankplan, ell .-0.5);
 end
 
 function get_y(plan::AbstractPlan)
