@@ -114,3 +114,14 @@ end
     @test isapprox(FY_mul, FY, rtol=1e-10)
     @test isapprox(FY_mul, FFTTest*fk_k2, rtol=1e-10)
 end
+
+@test "Consistency plan" begin
+    k = LogSpaced(10^(-5), 10., 2^10)
+    fk = f.(k)
+    Ell = Array([0.])
+    FFTTest = FFTLog.plan_Hankel(k, Ell)
+    Y = get_y(FFTTest)
+    FY = zeros(size(Y));
+    FY = evaluate_Hankel(FFTTest, fk)
+    @test isapprox(Fr_analytical, FY[1,:], rtol=1e-10)
+end

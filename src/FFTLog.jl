@@ -182,6 +182,23 @@ function prepare_FFTLog!(plan::AbstractPlan, ell::AbstractVector)
     plan.original_length+plan.n_extrap_low+plan.n_extrap_high+2*plan.n_pad, 2);
 end
 
+function plan_Hankel(x , Ell, ν = 1.01, n_extrap_low = 1500, n_extrap_high = 1500,
+    n_pad = 500)
+    hankel_plan = HankelPlan(x = x, ν = ν, n_extrap_low = n_extrap_low,
+    n_extrap_high = n_extrap_high, n_pad = n_pad)
+    prepare_Hankel!(hankel_plan, Ell)
+    return hankel_plan
+end
+
+function plan_FFTLog(x , Ell, ν = 1.01, n_extrap_low = 1500, n_extrap_high = 1500,
+    n_pad = 500)
+    fftlog_plan = FFTLogPlan(x = x, ν = ν, n_extrap_low = n_extrap_low,
+    n_extrap_high = n_extrap_high, n_pad = n_pad)
+    prepare_FFTLog!(fftlog_plan, Ell)
+    return fftlog_plan
+end
+
+
 function prepare_Hankel!(hankplan::HankelPlan, ell::AbstractVector)
     prepare_FFTLog!(hankplan, ell .-0.5);
 end
