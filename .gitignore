@@ -28,3 +28,4 @@ test/test*
 
 # Others
 .DS_Store
+.vscode/*

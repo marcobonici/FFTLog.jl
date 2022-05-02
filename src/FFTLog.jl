@@ -10,6 +10,10 @@ export prepare_Hankel!, evaluate_Hankel, evaluate_Hankel!
 export mul!
 export get_y
 
+
+##########################################################################################92
+
+
 abstract type AbstractPlan end
 
 set_num_threads(N::Int) = FFTW.set_num_threads(N)
@@ -17,102 +21,180 @@ set_num_threads(N::Int) = FFTW.set_num_threads(N)
 """
     _c_window(N::AbstractArray, NCut::Int)
 
-This function returns the smoothing window function as defined
-in Eq. (C.1) of [McEwen et al. (2016)](https://arxiv.org/abs/1603.04826).
+Returns the smoothing window function ``W(x, N_\\mathrm{cut})`` as defined
+in Eq. (C.1) of [McEwen et al. (2016)](https://arxiv.org/abs/1603.04826):
+
+```math
+W(x) = \\begin{cases}
+    \\displaystyle
+    \\frac{x - x_{\\mathrm{min}}}{x_{\\mathrm{left}} - x_{\\mathrm{min}}} - \\frac{1}{2\\pi}\\sin\\left( 2\\pi \\frac{x - x_{\\mathrm{min}}}{x_{\\mathrm{left}} - x_{\\mathrm{min}}}\\right) \\; , \\quad\\quad
+    x < x_{\\mathrm{left}}\\\\[12pt]
+    \\displaystyle
+    1 \\; , \\quad\\quad\\quad\\quad\\quad\\quad\\quad\\quad 
+    \\quad\\quad\\quad\\quad\\quad\\quad\\quad\\; \\, 
+    x_{\\mathrm{left}} \\leq x \\leq x_{\\mathrm{right}}\\\\[8pt]
+    \\displaystyle
+    \\frac{x_{\\mathrm{max}} - x}{x_{\\mathrm{max}} - x_{\\mathrm{right}}} -
+    \\frac{1}{2\\pi}\\sin\\left(
+        2\\pi \\frac{x_{\\mathrm{max}} - x}{x_{\\mathrm{max}} - x_{\\mathrm{right}}}
+    \\right) \\; , \\quad x > x_{\\mathrm{right}}
+\\end{cases}
+```
 """
 function _c_window(N::AbstractArray, NCut::Int)
     NRight = last(N) - NCut
-    NR = filter(x->x>=NRight, N)
-    ThetaRight = (last(N).-NR) ./ (last(N) - NRight - 1)
+    NR = filter(x -> x >= NRight, N)
+    ThetaRight = (last(N) .- NR) ./ (last(N) - NRight - 1)
     W = ones(length(N))
-    W[findall(x->x>=NRight, N)] = ThetaRight .- 1 ./ (2*π) .* sin.(2 .* π .*
-	ThetaRight)
+    W[findall(x -> x >= NRight, N)] = ThetaRight .- 1 ./ (2 * π) .* sin.(2 .* π .*
+                                                                         ThetaRight)
     return W
 end
 
 
 """
-    FFTLogPlan()
+    mutable struct FFTLogPlan{T,C} <: AbstractPlan
 
-This struct contains all the elements necessary to evaluate the integral with one Bessel function.
+This struct contains all the elements necessary to evaluate the integral 
+with one Bessel function.
+All the arguments of this struct are keyword arguments. Here we show 
+the compelte list and their default values:
+
+- `x::Vector{T}` : the LOGARITHMICALLY SPACED vector of x-axis values. You
+  need always to provide this vector.
+
+- `y::Matrix{T} = zeros(10, 10)` :
+
+- `fy::Matrix{T} = zeros(10, 10)` :
+
+- `hm::Matrix{C} = zeros(ComplexF64, 10, 10)` :
+
+- `hm_corr::Matrix{C} = zeros(ComplexF64, 10, 10)` :
+
+- `d_ln_x::T = log(x[2] / x[1])` :
+
+- `fy_corr::Matrix{T} = zeros(10, 10)` :
+
+- `original_length::Int = length(x)` :
+
+- `gl::Matrix{C} = zeros(ComplexF64, 100, 100)` :
+
+- `ν::T = 1.01` : bias parameter
+
+- `n_extrap_low::Int = 0` : number of points to concatenate on the left
+  of `x`, logarithmically distributed with the same ratio of the left-edge
+  elements of `x`
+
+- `n_extrap_high::Int = 0` : number of points to concatenate on the right
+  of `x`, logarithmically distributed with the same ratio of the right-edge
+  elements of `x`
+
+- `c_window_width::T = 0.25` :
+
+- `n_pad::Int = 0` : number of zeros to be concatenated both on the left and
+  on the right of the input function
+
+- `n::Int = 0` :
+
+- `N::Int = original_length + n_extrap_low + n_extrap_high + 2 * n_pad` :
+
+- `m::Vector{T} = zeros(N)` :
+
+- `cm::Vector{C} = zeros(ComplexF64, N)` :
+
+- `ηm::Vector{T} = zeros(N)` : 
+
+- `plan_rfft::FFTW.rFFTWPlan = plan_rfft(randn(1024))` : a random initialized 
+  fft plan of [`FFTW`](@ref)
+
+- `plan_irfft = 
+        plan_irfft(
+            randn(Complex{Float64}, 2, Int((original_length + n_extrap_low + n_extrap_high + 2 * n_pad) / 2) + 1),
+            original_length + n_extrap_low + n_extrap_high + 2 * n_pad, 
+            2
+        )` : 
+
 """
 @kwdef mutable struct FFTLogPlan{T,C} <: AbstractPlan
     x::Vector{T}
-    y::Matrix{T} = zeros(10,10)
-    fy::Matrix{T} = zeros(10,10)
-    hm::Matrix{C} = zeros(ComplexF64,10,10)
-    hm_corr::Matrix{C} = zeros(ComplexF64,10,10)
-    d_ln_x::T = log(x[2]/x[1])
-    fy_corr::Matrix{T} = zeros(10,10)
+    y::Matrix{T} = zeros(10, 10)
+    fy::Matrix{T} = zeros(10, 10)
+    hm::Matrix{C} = zeros(ComplexF64, 10, 10)
+    hm_corr::Matrix{C} = zeros(ComplexF64, 10, 10)
+    d_ln_x::T = log(x[2] / x[1])
+    fy_corr::Matrix{T} = zeros(10, 10)
     original_length::Int = length(x)
-    gl::Matrix{C} = zeros(ComplexF64,100,100)
+    gl::Matrix{C} = zeros(ComplexF64, 100, 100)
     ν::T = 1.01
     n_extrap_low::Int = 0
     n_extrap_high::Int = 0
     c_window_width::T = 0.25
     n_pad::Int = 0
     n::Int = 0
-    N::Int = original_length+n_extrap_low+n_extrap_high+2*n_pad
+    N::Int = original_length + n_extrap_low + n_extrap_high + 2 * n_pad
     m::Vector{T} = zeros(N)
-    cm::Vector{C} = zeros(ComplexF64,N)
+    cm::Vector{C} = zeros(ComplexF64, N)
     ηm::Vector{T} = zeros(N)
     plan_rfft::FFTW.rFFTWPlan = plan_rfft(randn(1024))
-    plan_irfft = plan_irfft(randn(Complex{Float64}, 2,
-    Int((original_length+n_extrap_low+n_extrap_high+2*n_pad)/2) +1),
-    original_length+n_extrap_low+n_extrap_high+2*n_pad, 2)
+    plan_irfft =
+        plan_irfft(
+            randn(Complex{Float64}, 2, Int((original_length + n_extrap_low + n_extrap_high + 2 * n_pad) / 2) + 1),
+            original_length + n_extrap_low + n_extrap_high + 2 * n_pad,
+            2
+        )
 end
 
+
+"""
+    mutable struct HankelPlan{T,C} <: AbstractPlan
+
+A specific type of FFTLogPlan designed for the Hankel transform.
+"""
 @kwdef mutable struct HankelPlan{T,C} <: AbstractPlan
     x::Vector{T}
-    y::Matrix{T} = zeros(10,10)
-    fy::Matrix{T} = zeros(10,10)
-    hm::Matrix{C} = zeros(ComplexF64,10,10)
-    hm_corr::Matrix{C} = zeros(ComplexF64,10,10)
-    d_ln_x::T = log(x[2]/x[1])
-    fy_corr::Matrix{T} = zeros(10,10)
+    y::Matrix{T} = zeros(10, 10)
+    fy::Matrix{T} = zeros(10, 10)
+    hm::Matrix{C} = zeros(ComplexF64, 10, 10)
+    hm_corr::Matrix{C} = zeros(ComplexF64, 10, 10)
+    d_ln_x::T = log(x[2] / x[1])
+    fy_corr::Matrix{T} = zeros(10, 10)
     original_length::Int = length(x)
-    gl::Matrix{C} = zeros(ComplexF64,100,100)
+    gl::Matrix{C} = zeros(ComplexF64, 100, 100)
     ν::T = 1.01
     n_extrap_low::Int = 0
     n_extrap_high::Int = 0
     c_window_width::T = 0.25
     n_pad::Int = 0
     n::Int = 0
-    N::Int = original_length+n_extrap_low+n_extrap_high+2*n_pad
+    N::Int = original_length + n_extrap_low + n_extrap_high + 2 * n_pad
     m::Vector{T} = zeros(N)
-    cm::Vector{C} = zeros(ComplexF64,N)
+    cm::Vector{C} = zeros(ComplexF64, N)
     ηm::Vector{T} = zeros(N)
     plan_rfft::FFTW.rFFTWPlan = plan_rfft(randn(1024))
     plan_irfft = plan_irfft(randn(Complex{Float64}, 2,
-    Int((original_length+n_extrap_low+n_extrap_high+2*n_pad)/2) +1),
-    original_length+n_extrap_low+n_extrap_high+2*n_pad, 2)
+            Int((original_length + n_extrap_low + n_extrap_high + 2 * n_pad) / 2) + 1),
+        original_length + n_extrap_low + n_extrap_high + 2 * n_pad, 2)
 end
 
-function _eval_cm!(plan::AbstractPlan, fx)
-    plan.cm = plan.plan_rfft * (fx .* plan.x .^ (-plan.ν))
-    plan.cm .*= _c_window(plan.m, floor(Int, plan.c_window_width*plan.N/2))
-end
 
-function _eval_ηm!(plan::AbstractPlan)
-    #TODO: #9 since we know the length of the initial array, we could use this info here to
-    #remove the necessity of DLnX
-    plan.ηm = 2 .* π ./ (plan.N .* plan.d_ln_x) .* plan.m
-end
+##########################################################################################92
 
-function _eval_gl(ell, z::Vector, n::Int)
-    gl = ((-1)^n) .* 2 .^ (z .-n) .* gamma.((ell .+ z .- n)/2) ./
-    gamma.((3 .+ ell .+ n .- z)/2)
-    if n != 0
-        for i in 1:n
-            gl .*= (z .- i)
-        end
-    end
-    return gl
-end
 
+"""
+    _logextrap(x::Vector, 
+        n_extrap_low::Int, n_extrap_high::Int) ::Vector
+
+Given an input LOGARITHMICALLY SPACED vector of values `x`, expands that
+vector adding `n_extrap_low` point on the left and `n_extrap_high` on
+the right.
+Consequently, for an input `x` of `N` values, it returns a vector `X`
+with length `N + n_extrap_low + n_extrap_right`.
+
+It is not assumed that the spacing is the same in the two edges of the data.
+"""
 function _logextrap(x::Vector, n_extrap_low::Int, n_extrap_high::Int)
-    d_ln_x_low = log(x[2]/x[1])
-    d_ln_x_high= log(reverse(x)[1]/reverse(x)[2])
+    d_ln_x_low = log(x[2] / x[1])
+    d_ln_x_high = log(reverse(x)[1] / reverse(x)[2])
     if n_extrap_low != 0
         X = vcat(x[1] .* exp.(d_ln_x_low .* Array(-n_extrap_low:-1)), x)
     end
@@ -122,11 +204,51 @@ function _logextrap(x::Vector, n_extrap_low::Int, n_extrap_high::Int)
     return X
 end
 
+
+"""
+    _zeropad(x::Vector, n_pad::Int)::Vector
+
+Concatenates `n_pad` zeros both on the left and on the right of
+the input vector `x`.
+Consequently, for an input `x` of `N` values, it returns a vector `X`
+with length `N + 2 * n_pad`.
+"""
 function _zeropad(x::Vector, n_pad::Int)
     return vcat(zeros(n_pad), x, zeros(n_pad))
 end
 
 
+
+##########################################################################################92
+
+
+function _eval_cm!(plan::AbstractPlan, fx)
+    plan.cm = plan.plan_rfft * (fx .* plan.x .^ (-plan.ν))
+    plan.cm .*= _c_window(plan.m, floor(Int, plan.c_window_width * plan.N / 2))
+end
+
+function _eval_ηm!(plan::AbstractPlan)
+    #TODO: #9 since we know the length of the initial array, we could use this info here to
+    #remove the necessity of DLnX
+    plan.ηm = 2 .* π ./ (plan.N .* plan.d_ln_x) .* plan.m
+end
+
+function _eval_gl(ell, z::Vector, n::Int)
+    gl = ((-1)^n) .* 2 .^ (z .- n) .* gamma.((ell .+ z .- n) / 2) ./
+         gamma.((3 .+ ell .+ n .- z) / 2)
+    if n != 0
+        for i in 1:n
+            gl .*= (z .- i)
+        end
+    end
+    return gl
+end
+
+
+"""
+    _eval_y!(plan::AbstractPlan, ell::Vector)
+
+"""
 function _eval_y!(plan::AbstractPlan, ell::Vector)
     reverse!(plan.x)
 
@@ -134,9 +256,9 @@ function _eval_y!(plan::AbstractPlan, ell::Vector)
     plan.fy_corr = zeros(size(plan.y))
 
     @inbounds for myl in 1:length(ell)
-        plan.y[myl,:] = (ell[myl] + 1) ./ plan.x
-        plan.fy_corr[myl,:] =
-        plan.y[myl,:] .^ (-plan.ν) .* sqrt(π) ./4
+        plan.y[myl, :] = (ell[myl] + 1) ./ plan.x
+        plan.fy_corr[myl, :] =
+            plan.y[myl, :] .^ (-plan.ν) .* sqrt(π) ./ 4
     end
 
     plan.fy = zeros(size(plan.y))
@@ -144,16 +266,18 @@ function _eval_y!(plan::AbstractPlan, ell::Vector)
     reverse!(plan.x)
 end
 
+
+
 function _eval_gl_hm!(plan::AbstractPlan, ell::Vector)
     z = plan.ν .+ im .* plan.ηm
     plan.gl = zeros(length(ell), length(z))
 
-    plan.hm_corr = zeros(ComplexF64, length(ell), Int(plan.N/2+1))
+    plan.hm_corr = zeros(ComplexF64, length(ell), Int(plan.N / 2 + 1))
 
     @inbounds for myl in 1:length(ell)
-        plan.hm_corr[myl,:] =
-        (plan.x[1] .* plan.y[myl,1] ) .^ (-im .*plan.ηm)
-        plan.gl[myl,:] = _eval_gl(ell[myl], z, plan.n)
+        plan.hm_corr[myl, :] =
+            (plan.x[1] .* plan.y[myl, 1]) .^ (-im .* plan.ηm)
+        plan.gl[myl, :] = _eval_gl(ell[myl], z, plan.n)
     end
     plan.hm = zeros(ComplexF64, size(plan.gl))
 
@@ -161,7 +285,7 @@ end
 
 function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
     plan.x = _logextrap(plan.x, plan.n_extrap_low + plan.n_pad,
-	  plan.n_extrap_high + plan.n_pad)
+        plan.n_extrap_high + plan.n_pad)
 
     _eval_y!(plan, ell)
 
@@ -172,17 +296,17 @@ function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
 
     plan.plan_rfft = plan_rfft(plan.x)
     plan.plan_irfft = plan_irfft(randn(Complex{Float64}, length(ell),
-    Int((length(plan.x)/2) +1)),
-    plan.original_length+plan.n_extrap_low+plan.n_extrap_high+2*plan.n_pad, 2)
+            Int((length(plan.x) / 2) + 1)),
+        plan.original_length + plan.n_extrap_low + plan.n_extrap_high + 2 * plan.n_pad, 2)
 end
 
 function prepare_Hankel!(hankplan::HankelPlan, ell::Vector)
-    prepare_FFTLog!(hankplan, ell .-0.5)
+    prepare_FFTLog!(hankplan, ell .- 0.5)
 end
 
 function get_y(plan::AbstractPlan)
-    return plan.y[:,plan.n_extrap_low+plan.n_pad+1:plan.n_extrap_low+
-	plan.n_pad+plan.original_length]
+    return plan.y[:, plan.n_extrap_low+plan.n_pad+1:plan.n_extrap_low+
+                                                    plan.n_pad+plan.original_length]
 end
 
 function evaluate_FFTLog(plan::AbstractPlan, fx)
@@ -193,36 +317,36 @@ end
 
 function evaluate_FFTLog!(fy, plan::AbstractPlan, fx)
     fx = _logextrap(fx, plan.n_extrap_low,
-	plan.n_extrap_high)
+        plan.n_extrap_high)
     fx = _zeropad(fx, plan.n_pad)
     _eval_cm!(plan, fx)
 
-    @inbounds for myl in 1:length(plan.y[:,1])
-        plan.hm[myl,:] = plan.cm .* @view plan.gl[myl,:]
-        plan.hm[myl,:] .*= @view plan.hm_corr[myl, :]
+    @inbounds for myl in 1:length(plan.y[:, 1])
+        plan.hm[myl, :] = plan.cm .* @view plan.gl[myl, :]
+        plan.hm[myl, :] .*= @view plan.hm_corr[myl, :]
     end
 
-    plan.fy[:,:] .= plan.plan_irfft * conj!(plan.hm)
-    plan.fy[:,:] .*= @view plan.fy_corr[:,:]
+    plan.fy[:, :] .= plan.plan_irfft * conj!(plan.hm)
+    plan.fy[:, :] .*= @view plan.fy_corr[:, :]
 
-    fy[:,:] .= @view plan.fy[:,plan.n_extrap_low+plan.n_pad+
-	1:plan.n_extrap_low+plan.n_pad+plan.original_length]
+    fy[:, :] .= @view plan.fy[:, plan.n_extrap_low+plan.n_pad+
+                                 1:plan.n_extrap_low+plan.n_pad+plan.original_length]
 end
 
 
 function evaluate_Hankel(hankplan::HankelPlan, fx)
-    fy = evaluate_FFTLog(hankplan, fx .*(
+    fy = evaluate_FFTLog(hankplan, fx .* (
         hankplan.x[hankplan.n_extrap_low+hankplan.n_pad+1:hankplan.n_extrap_low+
-	hankplan.n_pad+hankplan.original_length]).^(5/2) )
-    fy .*= sqrt.(2*get_y(hankplan)/π)
+                                                          hankplan.n_pad+hankplan.original_length]) .^ (5 / 2))
+    fy .*= sqrt.(2 * get_y(hankplan) / π)
     return fy
 end
 
 function evaluate_Hankel!(fy, hankplan::HankelPlan, fx)
-    evaluate_FFTLog!(fy, hankplan, fx .*(
+    evaluate_FFTLog!(fy, hankplan, fx .* (
         hankplan.x[hankplan.n_extrap_low+hankplan.n_pad+1:hankplan.n_extrap_low+
-	hankplan.n_pad+hankplan.original_length]).^(5/2) )
-    fy .*= sqrt.(2*get_y(hankplan)/π)
+                                                          hankplan.n_pad+hankplan.original_length]) .^ (5 / 2))
+    fy .*= sqrt.(2 * get_y(hankplan) / π)
     return fy
 end
 
@@ -231,7 +355,7 @@ function mul!(Y, Q::FFTLogPlan, A)
 end
 
 function mul!(Y, Q::HankelPlan, A)
-    Y[:,:] .= evaluate_Hankel!(Y, Q, A)
+    Y[:, :] .= evaluate_Hankel!(Y, Q, A)
 end
 
 function *(Q::FFTLogPlan, A)
