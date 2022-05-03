@@ -222,6 +222,23 @@ end
 ##########################################################################################92
 
 
+"""
+    _eval_cm!(plan::AbstractPlan, fx)
+
+Given a `plan::AbstractPlan`, compute the power-law expansion coefficients ``c_m``
+of the input data vector `fx`. It is assumed that `fx` contains the y-axis values
+corresponding to the x-axis ones `plan.x`, and consequently their length must be
+the same. 
+
+For a function `f` evaluated the `N` x-axis values `x`, the `c_m` coefficients are
+```math
+c_m = W_m \\sum_{q=0}^{N-1} \\frac{f(x_q)}{x_q^\\nu} e^{-\\frac{2\\pi}{N}i m q}
+```
+where ``W_m`` is the smoothing window function computed via `_c_window` and 
+``\\nu`` is the bias parameter stored in `plan.ν`
+
+See also: [`_c_window`](@ref)
+"""
 function _eval_cm!(plan::AbstractPlan, fx)
     plan.cm = plan.plan_rfft * (fx .* plan.x .^ (-plan.ν))
     plan.cm .*= _c_window(plan.m, floor(Int, plan.c_window_width * plan.N / 2))
@@ -232,6 +249,7 @@ function _eval_ηm!(plan::AbstractPlan)
     #remove the necessity of DLnX
     plan.ηm = 2 .* π ./ (plan.N .* plan.d_ln_x) .* plan.m
 end
+
 
 function _eval_gl(ell, z::Vector, n::Int)
     gl = ((-1)^n) .* 2 .^ (z .- n) .* gamma.((ell .+ z .- n) / 2) ./
