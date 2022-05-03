@@ -13,7 +13,14 @@ export get_y
 
 ##########################################################################################92
 
+"""
+    abstract type AbstractPlan end
 
+The abstract type of all the Plan to be used in the code.
+At the moment, they are:
+- [`FFTLogPlan`](@ref)
+- [`HankelPlan`](@ref)
+"""
 abstract type AbstractPlan end
 
 set_num_threads(N::Int) = FFTW.set_num_threads(N)
@@ -63,7 +70,8 @@ the compelte list and their default values:
 - `x::Vector{T}` : the LOGARITHMICALLY SPACED vector of x-axis values. You
   need always to provide this vector.
 
-- `y::Matrix{T} = zeros(10, 10)` :
+- `y::Matrix{T} = zeros(10, 10)` : the logarithmically spaced vector of the values
+  where the transformed function will be evaluated. It has the same length of `x`
 
 - `fy::Matrix{T} = zeros(10, 10)` :
 
@@ -71,15 +79,17 @@ the compelte list and their default values:
 
 - `hm_corr::Matrix{C} = zeros(ComplexF64, 10, 10)` :
 
-- `d_ln_x::T = log(x[2] / x[1])` :
+- `d_ln_x::T = log(x[2] / x[1])` : the spacing between the `x` elements.
 
 - `fy_corr::Matrix{T} = zeros(10, 10)` :
 
-- `original_length::Int = length(x)` :
+- `original_length::Int = length(x)` : the original inpout length of the `x` vector; 
+  it is stored because, for numerical stability purposes, during the computation this
+  vector is expanded at the edged, and so the input function ones. 
 
 - `gl::Matrix{C} = zeros(ComplexF64, 100, 100)` :
 
-- `ν::T = 1.01` : bias parameter
+- `ν::T = 1.01` : bias parameter.
 
 - `n_extrap_low::Int = 0` : number of points to concatenate on the left
   of `x`, logarithmically distributed with the same ratio of the left-edge
@@ -114,6 +124,7 @@ the compelte list and their default values:
             2
         )` : 
 
+See also: [`AbstractPlan`](@ref)
 """
 @kwdef mutable struct FFTLogPlan{T,C} <: AbstractPlan
     x::Vector{T}
@@ -149,6 +160,10 @@ end
     mutable struct HankelPlan{T,C} <: AbstractPlan
 
 A specific type of FFTLogPlan designed for the Hankel transform.
+Its arguments are the same of `FFTLogPlan`, checks its documentation for
+more information.
+
+See also: [`FFTLogPlan`](@ref), [`AbstractPlan`](@ref)
 """
 @kwdef mutable struct HankelPlan{T,C} <: AbstractPlan
     x::Vector{T}
@@ -228,7 +243,8 @@ end
 Given a `plan::AbstractPlan`, compute the power-law expansion coefficients ``c_m``
 of the input data vector `fx`. It is assumed that `fx` contains the y-axis values
 corresponding to the x-axis ones `plan.x`, and consequently their length must be
-the same. 
+the same.
+The computed `cm` vector is stored in `plan.cm`, and nothing is returned.
 
 For a function `f` evaluated the `N` x-axis values `x`, the `c_m` coefficients are
 ```math
@@ -237,13 +253,30 @@ c_m = W_m \\sum_{q=0}^{N-1} \\frac{f(x_q)}{x_q^\\nu} e^{-\\frac{2\\pi}{N}i m q}
 where ``W_m`` is the smoothing window function computed via `_c_window` and 
 ``\\nu`` is the bias parameter stored in `plan.ν`
 
-See also: [`_c_window`](@ref)
+See also: [`_c_window`](@ref), [`AbstractPlan`](@ref)
 """
 function _eval_cm!(plan::AbstractPlan, fx)
     plan.cm = plan.plan_rfft * (fx .* plan.x .^ (-plan.ν))
     plan.cm .*= _c_window(plan.m, floor(Int, plan.c_window_width * plan.N / 2))
 end
 
+
+
+"""
+    _eval_ηm!(plan::AbstractPlan)
+
+Given an input `plan::AbstractPlan`, compute all the ``\\eta_m`` coefficients, 
+defined as follows:
+```math
+\\eta_m = \\frac{2 \\pi m}{N \\, \\Delta_{\\ln x}} \\, 
+```
+where ``N``, ``\\Delta_{\\ln x}`` and the ``m`` vector are respectively
+`plan.N`, `plan.d_ln_x` and `plan.m`.
+
+The computed `ηm` vector is stored in `plan.cm`, and nothing is returned.
+
+See also: [`AbstractPlan`](@ref)
+"""
 function _eval_ηm!(plan::AbstractPlan)
     #TODO: #9 since we know the length of the initial array, we could use this info here to
     #remove the necessity of DLnX
@@ -251,6 +284,19 @@ function _eval_ηm!(plan::AbstractPlan)
 end
 
 
+
+"""
+    _eval_gl(ell, z::Vector, n::Int )::Vector
+
+Evaluate the ``g_{\\ell}`` coefficients, defined as
+```math
+g_{\\ell}^{(n)}(z) = (-1)^n \\, 2^{z-n} \\, \\frac{
+        \\Gamma\\left(\\frac{\\ell + z - n}{2}\\right)
+    }{
+        \\Gamma\\left(\\frac{3 + \\ell + n - z}{2}\\right)
+    }
+```
+"""
 function _eval_gl(ell, z::Vector, n::Int)
     gl = ((-1)^n) .* 2 .^ (z .- n) .* gamma.((ell .+ z .- n) / 2) ./
          gamma.((3 .+ ell .+ n .- z) / 2)
@@ -263,9 +309,20 @@ function _eval_gl(ell, z::Vector, n::Int)
 end
 
 
+
 """
     _eval_y!(plan::AbstractPlan, ell::Vector)
 
+Given an input `plan::AbstractPlan`, compute the `y` values where the output 
+function will be evaluated and the coefficient ``K(y)`` outside the IFFT. They
+are, respectively:
+```math
+y = \\frac{\\ell + 1}{x} \\; , \\quad\\quad K(y) = \\frac{\\sqrt{\\pi}}{4 y^{\\nu}}
+```
+The vector of their values are stored respectively in `plan.y` and `plan.fy_corr`,
+and nothing is returned.
+
+See also: [`AbstractPlan`](@ref)
 """
 function _eval_y!(plan::AbstractPlan, ell::Vector)
     reverse!(plan.x)
@@ -285,7 +342,28 @@ function _eval_y!(plan::AbstractPlan, ell::Vector)
 end
 
 
+"""
+    _eval_gl_hm!(plan::AbstractPlan, ell::Vector)
 
+Given an input `plan::AbstractPlan`, compute the ``g_{\\ell}`` values and 
+the ``h_m`` coefficents inside the IFFT. They are, respectively:
+
+```math
+g_{\\ell}^{(n)}(z) = (-1)^n \\, 2^{z-n} \\, \\frac{
+        \\Gamma\\left(\\frac{\\ell + z - n}{2}\\right)
+    }{
+        \\Gamma\\left(\\frac{3 + \\ell + n - z}{2}\\right)
+    } \\; , \\quad\\quad 
+h_m = (x_0 y_0)^{- i \\eta_m}
+```
+where ``\\eta_m = \\frac{2 \\pi m}{N \\, \\Delta_{\\ln x}}``, and ``x_0``
+``y_0`` are the smallest values of `plan.x` and `plan.y`, respectively. 
+
+The vector of their values are stored  in `plan.gl` and `plan.hy_corr`,
+and nothing is returned.
+
+See also: [`AbstractPlan`](@ref)
+"""
 function _eval_gl_hm!(plan::AbstractPlan, ell::Vector)
     z = plan.ν .+ im .* plan.ηm
     plan.gl = zeros(length(ell), length(z))
@@ -300,6 +378,10 @@ function _eval_gl_hm!(plan::AbstractPlan, ell::Vector)
     plan.hm = zeros(ComplexF64, size(plan.gl))
 
 end
+
+
+##########################################################################################92
+
 
 function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
     plan.x = _logextrap(plan.x, plan.n_extrap_low + plan.n_pad,
