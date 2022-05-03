@@ -383,6 +383,20 @@ end
 ##########################################################################################92
 
 
+"""
+    prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
+
+Given an input `plan::AbstractPlan`, pre-plan an optimized real-input FFT for all
+the Bessel function orders stored in the vector `ell`.
+In other words, it computes:
+- the `y` vector of values where the transformed will be evaluated (stored in `plan.y`).
+- the corresponding `gl` vector of ``g_{\\ell}`` values (stored in `plan.gl`).
+- the `m` vector of indexes for the ``c_m`` coefficents (stored in `plan.m`).
+- the corresponding `ηm` and `hm` vector of ``\\eta_m`` and ``h_m`` values 
+  (stored in `plan.ηm` and `plan.hm_corr`).
+
+See also: [`AbstractPlan`](@ref)
+"""
 function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
     plan.x = _logextrap(plan.x, plan.n_extrap_low + plan.n_pad,
         plan.n_extrap_high + plan.n_pad)
@@ -395,18 +409,41 @@ function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
     _eval_gl_hm!(plan, ell)
 
     plan.plan_rfft = plan_rfft(plan.x)
-    plan.plan_irfft = plan_irfft(randn(Complex{Float64}, length(ell),
-            Int((length(plan.x) / 2) + 1)),
+    plan.plan_irfft = plan_irfft(
+        randn(Complex{Float64}, length(ell), Int((length(plan.x) / 2) + 1) ),
         plan.original_length + plan.n_extrap_low + plan.n_extrap_high + 2 * plan.n_pad, 2)
 end
 
+"""
+    prepare_Hankel!(plan::AbstractPlan, ell::Vector)
+
+Given an input `plan::AbstractPlan`, pre-plan an optimized real-input FFT for all
+the Bessel function orders stored in the vector `ell` concerning an Hankel transform.
+Same as `prepare_FFTLog`, checks its documentation for more information.
+
+See also: [`AbstractPlan`](@ref),  [`prepare_FFTLog!`](@ref)
+"""
 function prepare_Hankel!(hankplan::HankelPlan, ell::Vector)
     prepare_FFTLog!(hankplan, ell .- 0.5)
 end
 
+
+
+##########################################################################################92
+
+
+"""
+    get_y(plan::AbstractPlan)::Vector
+
+Return the computed `y` vector, containing the values where the transformed
+function will be evaluated.
+
+See also: [`AbstractPlan`](@ref)
+"""
 function get_y(plan::AbstractPlan)
-    return plan.y[:, plan.n_extrap_low+plan.n_pad+1:plan.n_extrap_low+
-                                                    plan.n_pad+plan.original_length]
+    n1 = plan.n_extrap_low + plan.n_pad + 1
+    n2 = plan.n_extrap_low + plan.n_pad + plan.original_length
+    return plan.y[:, n1:n2]
 end
 
 function evaluate_FFTLog(plan::AbstractPlan, fx)
@@ -415,9 +452,14 @@ function evaluate_FFTLog(plan::AbstractPlan, fx)
     return fy
 end
 
+"""
+    evaluate_FFTLog!(fy, plan::AbstractPlan, fx)
+
+Given an input `plan::AbstractPlan`, evaluate the FFT of the `fx` y-axis data
+on the basis of the parameters stored in `plan`.
+"""
 function evaluate_FFTLog!(fy, plan::AbstractPlan, fx)
-    fx = _logextrap(fx, plan.n_extrap_low,
-        plan.n_extrap_high)
+    fx = _logextrap(fx, plan.n_extrap_low, plan.n_extrap_high)
     fx = _zeropad(fx, plan.n_pad)
     _eval_cm!(plan, fx)
 
@@ -429,8 +471,9 @@ function evaluate_FFTLog!(fy, plan::AbstractPlan, fx)
     plan.fy[:, :] .= plan.plan_irfft * conj!(plan.hm)
     plan.fy[:, :] .*= @view plan.fy_corr[:, :]
 
-    fy[:, :] .= @view plan.fy[:, plan.n_extrap_low+plan.n_pad+
-                                 1:plan.n_extrap_low+plan.n_pad+plan.original_length]
+    n1 = plan.n_extrap_low + plan.n_pad + 1
+    n2 = plan.n_extrap_low + plan.n_pad + plan.original_length
+    fy[:, :] .= @view plan.fy[:, n1:n2]
 end
 
 
@@ -449,6 +492,12 @@ function evaluate_Hankel!(fy, hankplan::HankelPlan, fx)
     fy .*= sqrt.(2 * get_y(hankplan) / π)
     return fy
 end
+
+
+
+##########################################################################################92
+
+
 
 function mul!(Y, Q::FFTLogPlan, A)
     evaluate_FFTLog!(Y, Q, A)
