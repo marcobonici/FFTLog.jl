@@ -18,7 +18,7 @@ export get_y
 
 The abstract type of all the Plan to be used in the code.
 At the moment, they are:
-- [`FFTLogPlan`](@ref)
+- [`SingleBesselPlan`](@ref)
 - [`HankelPlan`](@ref)
 """
 abstract type AbstractPlan end
@@ -60,7 +60,7 @@ end
 
 
 """
-    mutable struct FFTLogPlan{T,C} <: AbstractPlan
+    mutable struct SingleBesselPlan{T,C} <: AbstractPlan
 
 This struct contains all the elements necessary to evaluate the integral 
 with one Bessel function.
@@ -127,7 +127,7 @@ the compelte list and their default values:
 
 See also: [`AbstractPlan`](@ref)
 """
-@kwdef mutable struct FFTLogPlan{T,C} <: AbstractPlan
+@kwdef mutable struct SingleBesselPlan{T,C} <: AbstractPlan
     x::Vector{T}
     y::Matrix{T} = zeros(10, 10)
     fy::Matrix{T} = zeros(10, 10)
@@ -161,10 +161,10 @@ end
     mutable struct HankelPlan{T,C} <: AbstractPlan
 
 A specific type of FFTLogPlan designed for the Hankel transform.
-Its arguments are the same of `FFTLogPlan`, checks its documentation for
+Its arguments are the same of `SingleBesselPlan`, checks its documentation for
 more information.
 
-See also: [`FFTLogPlan`](@ref), [`AbstractPlan`](@ref)
+See also: [`SingleBesselPlan`](@ref), [`AbstractPlan`](@ref)
 """
 @kwdef mutable struct HankelPlan{T,C} <: AbstractPlan
     x::Vector{T}
@@ -536,7 +536,7 @@ end
 
 
 
-function mul!(Y, Q::FFTLogPlan, A)
+function mul!(Y, Q::SingleBesselPlan, A)
     evaluate_FFTLog!(Y, Q, A)
 end
 
@@ -544,7 +544,7 @@ function mul!(Y, Q::HankelPlan, A)
     Y[:, :] .= evaluate_Hankel!(Y, Q, A)
 end
 
-function *(Q::FFTLogPlan, A)
+function *(Q::SingleBesselPlan, A)
     evaluate_FFTLog(Q, A)
 end
 

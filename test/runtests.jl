@@ -15,7 +15,7 @@ k = read_file[:,1]
 Pk = read_file[:,2]
 
 @testset "BeyondLimber checks" begin
-    FFTTest = FFTLog.FFTLogPlan(x = k, ν=1.01, n_extrap_low = 1500, n_extrap_high = 1500,
+    FFTTest = FFTLog.SingleBesselPlan(x = k, ν=1.01, n_extrap_low = 1500, n_extrap_high = 1500,
     n_pad = 2000)
     Ell = Array([1., 2.])
     FFTLog.prepare_FFTLog!(FFTTest, Ell)
@@ -27,7 +27,7 @@ Pk = read_file[:,2]
     @test isapprox(Fr, FY[1,:], rtol=1e-5)
     @test isapprox(r, Y[1,:], rtol=1e-5)
 
-    FFTTest = FFTLog.FFTLogPlan(x = k, ν=1.01, n_extrap_low = 1500, n_extrap_high = 1500,
+    FFTTest = FFTLog.SingleBesselPlan(x = k, ν=1.01, n_extrap_low = 1500, n_extrap_high = 1500,
     n_pad = 2000, n = 1)
     Ell = Array([1., 2.])
     FFTLog.prepare_FFTLog!(FFTTest, Ell)
@@ -39,7 +39,7 @@ Pk = read_file[:,2]
     @test isapprox(Fr1, FY[1,:], rtol=1e-8)
     @test isapprox(r1, Y[1,:], rtol=1e-8)
 
-    FFTTest = FFTLog.FFTLogPlan(x = k, ν=1.01, n_extrap_low = 1500, n_extrap_high = 1500,
+    FFTTest = FFTLog.SingleBesselPlan(x = k, ν=1.01, n_extrap_low = 1500, n_extrap_high = 1500,
     n_pad = 2000, n = 2)
     Ell = Array([1., 2.])
     FFTLog.prepare_FFTLog!(FFTTest, Ell)
@@ -101,7 +101,7 @@ end
 @testset "mul! operator test" begin
     k = LogSpaced(10^(-5), 10., 2^10)
     fk = f.(k)
-    FFTTest = FFTLog.FFTLogPlan(x = k, n_extrap_low = 1500, ν=1.01, n_extrap_high = 1500,
+    FFTTest = FFTLog.SingleBesselPlan(x = k, n_extrap_low = 1500, ν=1.01, n_extrap_high = 1500,
     n_pad = 500)
     Ell = Array([0.])
     prepare_FFTLog!(FFTTest, Ell)
