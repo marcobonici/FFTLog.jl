@@ -73,7 +73,8 @@ the compelte list and their default values:
 - `y::Matrix{T} = zeros(10, 10)` : the logarithmically spaced vector of the values
   where the transformed function will be evaluated. It has the same length of `x`
 
-- `fy::Matrix{T} = zeros(10, 10)` :
+- `fy::Matrix{T} = zeros(10, 10)` : the y-axis of the transformed function; it is a vector
+  if only one Bessel function order is provided in the functions
 
 - `hm::Matrix{C} = zeros(ComplexF64, 10, 10)` :
 
@@ -432,6 +433,7 @@ end
 ##########################################################################################92
 
 
+
 """
     get_y(plan::AbstractPlan)::Vector
 
@@ -446,17 +448,33 @@ function get_y(plan::AbstractPlan)
     return plan.y[:, n1:n2]
 end
 
+
+
+"""
+    evaluate_FFTLog(plan::AbstractPlan, fx)::Union{Vector, Matrix}
+
+Given an input `plan::AbstractPlan`, evaluate the FFT `fy` of the `fx` y-axis data
+on the basis of the parameters stored in `plan`.
+The result is both stored in `plan.fy` and retuned as output.
+
+See also: [`AbstractPlan`](@ref)
+"""
 function evaluate_FFTLog(plan::AbstractPlan, fx)
     fy = similar(get_y(plan))
     evaluate_FFTLog!(fy, plan, fx)
     return fy
 end
 
+
+
 """
     evaluate_FFTLog!(fy, plan::AbstractPlan, fx)
 
-Given an input `plan::AbstractPlan`, evaluate the FFT of the `fx` y-axis data
+Given an input `plan::AbstractPlan`, evaluate the FFT `fy` of the `fx` y-axis data
 on the basis of the parameters stored in `plan`.
+The result is stored both in `plan.fy` and in the input `fy`.
+
+See also: [`AbstractPlan`](@ref)
 """
 function evaluate_FFTLog!(fy, plan::AbstractPlan, fx)
     fx = _logextrap(fx, plan.n_extrap_low, plan.n_extrap_high)
@@ -477,18 +495,37 @@ function evaluate_FFTLog!(fy, plan::AbstractPlan, fx)
 end
 
 
+"""
+    evaluate_Hankel(plan::HankelPlan, fx)::Union{Vector, Matrix}
+
+Given an input `plan::HankelPlan`, evaluate the FFT `fy` of the `fx` y-axis data
+on the basis of the parameters stored in `plan` for an Hankel transform.
+The result is both stored in `plan.fy` and retuned as output.
+
+See also: [`HankelPlan`](@ref)
+"""
 function evaluate_Hankel(hankplan::HankelPlan, fx)
-    fy = evaluate_FFTLog(hankplan, fx .* (
-        hankplan.x[hankplan.n_extrap_low+hankplan.n_pad+1:hankplan.n_extrap_low+
-                                                          hankplan.n_pad+hankplan.original_length]) .^ (5 / 2))
+    n1 = hankplan.n_extrap_low + hankplan.n_pad + 1
+    n2 = hankplan.n_extrap_low + hankplan.n_pad + hankplan.original_length
+    fy = evaluate_FFTLog(hankplan, fx .* (hankplan.x[n1:n2]) .^ (5 / 2))
     fy .*= sqrt.(2 * get_y(hankplan) / π)
     return fy
 end
 
+
+"""
+    evaluate_Hankel!(fy, plan::HankelPlan, fx)
+
+Given an input `plan::HankelPlan`, evaluate the FFT `fy` of the `fx` y-axis data
+on the basis of the parameters stored in `plan` for an Hankel transform.
+The result is stored both in `plan.fy` and in the input `fy`.
+
+See also: [`HankelPlan`](@ref)
+"""
 function evaluate_Hankel!(fy, hankplan::HankelPlan, fx)
-    evaluate_FFTLog!(fy, hankplan, fx .* (
-        hankplan.x[hankplan.n_extrap_low+hankplan.n_pad+1:hankplan.n_extrap_low+
-                                                          hankplan.n_pad+hankplan.original_length]) .^ (5 / 2))
+    n1 = hankplan.n_extrap_low + hankplan.n_pad + 1
+    n2 = hankplan.n_extrap_low + hankplan.n_pad + hankplan.original_length
+    evaluate_FFTLog!(fy, hankplan, fx .* (hankplan.x[n1:n2]) .^ (5 / 2))
     fy .*= sqrt.(2 * get_y(hankplan) / π)
     return fy
 end
