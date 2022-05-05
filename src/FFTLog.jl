@@ -3,7 +3,7 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
-using Nemo: hypergeometric_2f1
+using Nemo: hyp2f1
 import Base: *
 
 export prepare_FFTLog!, evaluate_FFTLog, evaluate_FFTLog!
@@ -365,7 +365,7 @@ function _eval_gll(l1, l2, t, z::Vector)
     @. gll = 
         2^(z - 1) * gamma((l1 + l2 + z) / 2) /
         (gamma((z - 1 + l2 - l1) / 2) * gamma(l2 + 3 / 2)) *
-        t^l2 * hypergeometric_2f1(
+        t^l2 * hyp2f1(
             (z - 1 + l2 - l1)/2, (l1 + l2 + z)/2, l2 + 3/2, t^2
         )
 
