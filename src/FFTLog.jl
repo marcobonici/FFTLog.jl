@@ -215,15 +215,15 @@ end
 
 @kwdef mutable struct DoubleBesselPlan{T,C} <: AbstractPlan
     x::Vector{T}
-    a::Matrix{T} = zeros(10, 10)
-    ϕa::Matrix{T} = zeros(10, 10)
+    a::Matrix{T} = zeros(10, 10, 10, 10)
+    ϕat::Matrix{T} = zeros(10, 10, 10, 10)
     t::Vector{T} = zeros(10)
     hm::Matrix{C} = zeros(ComplexF64, 10, 10, 10, 10)
     hm_corr::Matrix{C} = zeros(ComplexF64, 10, 10)
     d_ln_x::T = log(x[2] / x[1])
-    ϕa_corr::Matrix{T} = zeros(10, 10)
+    ϕat_corr::Matrix{T} = zeros(10, 10, 10, 10)
     original_length::Int = length(x)
-    gll::Matrix{C} = zeros(ComplexF64, 100, 100, 100, 100)
+    gll::Matrix{C} = zeros(ComplexF64, 10, 10, 10, 10)
     ν::T = 1.01
     n_extrap_low::Int = 0
     n_extrap_high::Int = 0
@@ -388,36 +388,36 @@ and nothing is returned.
 See also: [`AbstractPlan`](@ref)
 """
 function _eval_y!(plan::AbstractPlan, ell::Vector)
-    reverse!(plan.x)
 
     plan.y = zeros(length(ell), length(plan.x))
     plan.fy_corr = zeros(size(plan.y))
+    plan.fy = zeros(size(plan.y))
+
+    reverse!(plan.x)
 
     @inbounds for myl in 1:length(ell)
         plan.y[myl, :] = (ell[myl] + 1) ./ plan.x
         plan.fy_corr[myl, :] =
             plan.y[myl, :] .^ (-plan.ν) .* sqrt(π) ./ 4
     end
-
-    plan.fy = zeros(size(plan.y))
 
     reverse!(plan.x)
 end
 
 
-function _eval_y!(plan::DoubleBesselPlan, l1::Vector, l2::Vector)
+function _eval_y!(plan::DoubleBesselPlan, l1::Vector, l2::Vector, t::Vector)
+
+    plan.a = zeros(length(l1), length(l2), length(t), length(plan.x))
+    plan.ϕat_corr = zeros(size(plan.a))
+    plan.ϕat = zeros(size(plan.a))
+
     reverse!(plan.x)
 
-    plan.y = zeros(length(ell), length(plan.x))
-    plan.fy_corr = zeros(size(plan.y))
-
-    @inbounds for myl in 1:length(ell)
-        plan.y[myl, :] = (ell[myl] + 1) ./ plan.x
-        plan.fy_corr[myl, :] =
-            plan.y[myl, :] .^ (-plan.ν) .* sqrt(π) ./ 4
+    @inbounds for mal1 in 1:length(l1), mal2 in 1:length(l2), mt in 1:length(t)
+        plan.a[mal1, mal2, mt, :] = (0.5 * (l1[mal1] + l2[mal2]) + 1) ./ plan.x
+        plan.ϕat_corr[mal1, mal2, mt, :] =
+            plan.a[mal1, mal2, mt, :] .^ (-plan.ν) .* sqrt(π) ./ 4
     end
-
-    plan.fy = zeros(size(plan.y))
 
     reverse!(plan.x)
 end
@@ -461,6 +461,23 @@ function _eval_gl_hm!(plan::AbstractPlan, ell::Vector)
 end
 
 
+function _eval_gll_hm!(plan::DoubleBesselPlan, l1::Vector, l2::Vector, t::Vector)
+    z = plan.ν .+ im .* plan.ηm
+    plan.gll = zeros(length(l1), length(l2), length(t), length(z))
+    plan.hm = zeros(ComplexF64, size(plan.gll))
+
+    plan.hm_corr = zeros(ComplexF64, length(l1), length(l2), length(t), Int(plan.N / 2 + 1))
+
+    @inbounds for mal1 in 1:length(l1), mal2 in 1:length(l2), mt in 1:length(t)
+        plan.hm_corr[mal1, mal2, mt, :] =
+            (plan.x[1] .* plan.a[mal1, mal2, mt, 1]) .^ (-im .* plan.ηm)
+        plan.gll[mal1, mal2, mt, :] = _eval_gll(l1[mal1], l2[mal2], t[mt], z)
+    end
+end
+
+
+
+
 ##########################################################################################92
 
 
@@ -488,6 +505,24 @@ function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
     _eval_ηm!(plan)
 
     _eval_gl_hm!(plan, ell)
+
+    plan.plan_rfft = plan_rfft(plan.x)
+    plan.plan_irfft = plan_irfft(
+        randn(Complex{Float64}, length(ell), Int((length(plan.x) / 2) + 1)),
+        plan.original_length + plan.n_extrap_low + plan.n_extrap_high + 2 * plan.n_pad, 2)
+end
+
+
+function prepare_FFTLog!(plan::DoubleBesselPlan, l1::Vector, l2::Vector, t::Vector)
+    plan.x = _logextrap(plan.x, plan.n_extrap_low + plan.n_pad,
+        plan.n_extrap_high + plan.n_pad)
+
+    _eval_y!(plan, l1, l2, t)
+
+    plan.m = Array(0:length(plan.x)/2)
+    _eval_ηm!(plan)
+
+    _eval_gll_hm!(plan, l1, l2, t)
 
     plan.plan_rfft = plan_rfft(plan.x)
     plan.plan_irfft = plan_irfft(
@@ -575,6 +610,25 @@ function evaluate_FFTLog!(fy, plan::AbstractPlan, fx)
 end
 
 
+function evaluate_FFTLog!(ϕat, plan::DoubleBesselPlan, fx)
+    fx = _logextrap(fx, plan.n_extrap_low, plan.n_extrap_high)
+    fx = _zeropad(fx, plan.n_pad)
+    _eval_cm!(plan, fx)
+
+    @inbounds for mal1 in 1:length(l1), mal2 in 1:length(l2), mt in 1:length(t)
+        plan.hm[mal1, mal2, mt, :] = plan.cm .* @view plan.gll[mal1, mal2, mt, :]
+        plan.hm[mal1, mal2, mt, :] .*= @view plan.hm_corr[mal1, mal2, mt, :]
+    end
+
+    plan.ϕat[:, :, :, :] .= plan.plan_irfft * conj!(plan.hm)
+    plan.ϕat[:, :, :, :] .*= @view plan.ϕat_corr[:, :, :, :]
+
+    n1 = plan.n_extrap_low + plan.n_pad + 1
+    n2 = plan.n_extrap_low + plan.n_pad + plan.original_length
+    ϕat[:, :] .= @view plan.ϕat[:, n1:n2]
+end
+
+
 """
     evaluate_Hankel(plan::HankelPlan, fx)::Union{Vector, Matrix}
 
@@ -616,7 +670,7 @@ end
 
 
 
-function mul!(Y, Q::SingleBesselPlan, A)
+function mul!(Y, Q::Union{SingleBesselPlan, DoubleBesselPlan}, A)
     evaluate_FFTLog!(Y, Q, A)
 end
 
@@ -624,7 +678,7 @@ function mul!(Y, Q::HankelPlan, A)
     Y[:, :] .= evaluate_Hankel!(Y, Q, A)
 end
 
-function *(Q::SingleBesselPlan, A)
+function *(Q::Union{SingleBesselPlan, DoubleBesselPlan}, A)
     evaluate_FFTLog(Q, A)
 end
 
