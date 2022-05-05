@@ -3,7 +3,7 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
-using Nemo: hyp2f1
+using Nemo: hyp2f1, AcbField, ArbField
 import Base: *
 
 export prepare_FFTLog!, evaluate_FFTLog, evaluate_FFTLog!
@@ -215,15 +215,15 @@ end
 
 @kwdef mutable struct DoubleBesselPlan{T,C} <: AbstractPlan
     x::Vector{T}
-    a::Matrix{T} = zeros(10, 10, 10, 10)
-    ϕat::Matrix{T} = zeros(10, 10, 10, 10)
+    a::Array{T, 4} = zeros(10, 10, 10, 10)
+    ϕat::Array{T, 4} = zeros(10, 10, 10, 10)
     t::Vector{T} = zeros(10)
-    hm::Matrix{C} = zeros(ComplexF64, 10, 10, 10, 10)
-    hm_corr::Matrix{C} = zeros(ComplexF64, 10, 10)
+    hm::Array{C, 4} = zeros(ComplexF64, 10, 10, 10, 10)
+    hm_corr::Array{C, 4} = zeros(ComplexF64, 10, 10, 10, 10)
     d_ln_x::T = log(x[2] / x[1])
-    ϕat_corr::Matrix{T} = zeros(10, 10, 10, 10)
+    ϕat_corr::Array{T, 4} = zeros(10, 10, 10, 10)
     original_length::Int = length(x)
-    gll::Matrix{C} = zeros(ComplexF64, 10, 10, 10, 10)
+    gll::Array{C, 4} = zeros(ComplexF64, 10, 10, 10, 10)
     ν::T = 1.01
     n_extrap_low::Int = 0
     n_extrap_high::Int = 0
@@ -235,12 +235,15 @@ end
     cm::Vector{C} = zeros(ComplexF64, N)
     ηm::Vector{T} = zeros(N)
     plan_rfft::FFTW.rFFTWPlan = plan_rfft(randn(1024))
-    plan_irfft =
+    plan_irfft = begin
+        NNN = original_length + n_extrap_low + n_extrap_high + 2 * n_pad
         plan_irfft(
-            randn(Complex{Float64}, 2, Int((original_length + n_extrap_low + n_extrap_high + 2 * n_pad) / 2) + 1),
-            original_length + n_extrap_low + n_extrap_high + 2 * n_pad,
-            2
+            randn(Complex{Float64}, 2, 2, 2, Int(NNN / 2) + 1),
+            NNN,
+            (2, 2, 2)
         )
+        irfft
+        end
 end
 
 
@@ -360,13 +363,29 @@ function _eval_gl(ell, z::Vector, n::Int)
     return gl
 end
 
+function my_hyp2f1(a, b, c, x) 
+    convert(ComplexF64, 
+        hyp2f1(
+            AcbField(64)(real(a), imag(a)),
+            AcbField(64)(real(b), imag(b)),
+            AcbField(64)(real(c), imag(c)),
+            AcbField(64)(real(x), imag(x))
+        )
+    )
+end
+
 
 function _eval_gll(l1, l2, t, z::Vector)
+    gll = zeros(ComplexF64, size(z))
+
     @. gll = 
         2^(z - 1) * gamma((l1 + l2 + z) / 2) /
         (gamma((z - 1 + l2 - l1) / 2) * gamma(l2 + 3 / 2)) *
-        t^l2 * hyp2f1(
-            (z - 1 + l2 - l1)/2, (l1 + l2 + z)/2, l2 + 3/2, t^2
+        t^l2 * my_hyp2f1(
+            0.5 * (z - 1 + l2 - l1), 
+            0.5 * (l1 + l2 + z), 
+            l2 + 1.5, 
+            t^2
         )
 
     return gll
@@ -525,9 +544,11 @@ function prepare_FFTLog!(plan::DoubleBesselPlan, l1::Vector, l2::Vector, t::Vect
     _eval_gll_hm!(plan, l1, l2, t)
 
     plan.plan_rfft = plan_rfft(plan.x)
+    NNN = plan.original_length + plan.n_extrap_low + plan.n_extrap_high + 2 * plan.n_pad
     plan.plan_irfft = plan_irfft(
-        randn(Complex{Float64}, length(ell), Int((length(plan.x) / 2) + 1)),
-        plan.original_length + plan.n_extrap_low + plan.n_extrap_high + 2 * plan.n_pad, 2)
+        randn(Complex{Float64}, length(l1), length(l2), length(t), Int((length(plan.x) / 2) + 1)),
+        NNN, (length(l1), length(l2), length(t))
+        )
 end
 
 """
