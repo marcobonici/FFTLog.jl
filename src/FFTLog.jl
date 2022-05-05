@@ -3,6 +3,7 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
+using Nemo: hypergeometric_2f1
 import Base: *
 
 export prepare_FFTLog!, evaluate_FFTLog, evaluate_FFTLog!
@@ -76,19 +77,31 @@ the compelte list and their default values:
 - `fy::Matrix{T} = zeros(10, 10)` : the y-axis of the transformed function; it is a vector
   if only one Bessel function order is provided in the functions
 
-- `hm::Matrix{C} = zeros(ComplexF64, 10, 10)` :
+- `hm::Matrix{C} = zeros(ComplexF64, 10, 10)` : matrix of the coefficients
+  ``h_m = c_m \\, h_{m, \\mathrm{corr}} \\, g_\\ell``, where ``c_m``s,  
+  ``h_{m, \\mathrm{corr}}``s and ``g_\\ell`` are respectively stored in
+  `plan.cm`, `plan.hm_corr` and `plan.gl`.
+  Each column contains all the ``h_m``s for a given spherical Bessel order ``\\ell``. 
 
-- `hm_corr::Matrix{C} = zeros(ComplexF64, 10, 10)` :
+- `hm_corr::Matrix{C} = zeros(ComplexF64, 10, 10)` : matrix of the coefficients
+  ``h_{m, \\mathrm{corr}} = (x_0 y_0)^{- i \\eta_m}``, where ``\\eta_m = \\frac{2 \\pi m}{N \\, \\Delta_{\\ln x}}``
+  and ``x_0`` and ``y_0`` are the smallest values of `plan.x` and `plan.y`, respectively. 
+  Each column contains all the ``h_{m, \\mathrm{corr}}``s for a given spherical Bessel order ``\\ell``. 
 
 - `d_ln_x::T = log(x[2] / x[1])` : the spacing between the `x` elements.
 
-- `fy_corr::Matrix{T} = zeros(10, 10)` :
+- `fy_corr::Matrix{T} = zeros(10, 10)` : matrix of the coefficients
+  ``K(y) = \\frac{\\sqrt{\\pi}}{4 y^{\\nu}}``, where ``\\nu`` is the bias paremeter
+  stored in `plan.ν`.
+  Each column contains all the ``h_{m, \\mathrm{corr}}``s for a given spherical Bessel order ``\\ell``. 
+
 
 - `original_length::Int = length(x)` : the original inpout length of the `x` vector; 
   it is stored because, for numerical stability purposes, during the computation this
   vector is expanded at the edged, and so the input function ones. 
 
-- `gl::Matrix{C} = zeros(ComplexF64, 100, 100)` :
+- `gl::Matrix{C} = zeros(ComplexF64, 100, 100)` : vector with the ``g_\\ell`` values
+  for all the input spherical Bessel order.
 
 - `ν::T = 1.01` : bias parameter.
 
@@ -100,20 +113,27 @@ the compelte list and their default values:
   of `x`, logarithmically distributed with the same ratio of the right-edge
   elements of `x`
 
-- `c_window_width::T = 0.25` :
+- `c_window_width::T = 0.25` : position where the tapering by the window function 
+  begins; by default `c_window_width= 0.25`, so is begins when 
+  ``m = \\pm 0.75 \\times N/2``, where ``N`` is the size of the input array.
 
 - `n_pad::Int = 0` : number of zeros to be concatenated both on the left and
-  on the right of the input function
+  on the right of the input function.
 
-- `n::Int = 0` :
+- `n::Int = 0` : the derivative order for the spherical Bessel function.
 
-- `N::Int = original_length + n_extrap_low + n_extrap_high + 2 * n_pad` :
+- `N::Int = original_length + n_extrap_low + n_extrap_high + 2 * n_pad` : number
+  of points where the input function is known; are considered both the "true values"
+  and the fake ones, added for a more numerically stable fft.  
 
-- `m::Vector{T} = zeros(N)` :
+- `m::Vector{T} = zeros(N)` : vector with all the indexes that will be used for the
+  power-law expansion of the input function
 
-- `cm::Vector{C} = zeros(ComplexF64, N)` :
+- `cm::Vector{C} = zeros(ComplexF64, N)` : vector containing all the input function 
+  power-law exapnsion ``c_m`` coefficients.
 
-- `ηm::Vector{T} = zeros(N)` : 
+- `ηm::Vector{T} = zeros(N)` : vector of all the 
+  ``\\eta_m = \\frac{2 \\pi m}{N \\, \\Delta_{\\ln x}} `` coefficients.
 
 - `plan_rfft::FFTW.rFFTWPlan = plan_rfft(randn(1024))` : a random initialized 
   fft plan of [`FFTW`](@ref)
@@ -190,6 +210,37 @@ See also: [`SingleBesselPlan`](@ref), [`AbstractPlan`](@ref)
     plan_irfft = plan_irfft(randn(Complex{Float64}, 2,
             Int((original_length + n_extrap_low + n_extrap_high + 2 * n_pad) / 2) + 1),
         original_length + n_extrap_low + n_extrap_high + 2 * n_pad, 2)
+end
+
+
+@kwdef mutable struct DoubleBesselPlan{T,C} <: AbstractPlan
+    x::Vector{T}
+    a::Matrix{T} = zeros(10, 10)
+    ϕa::Matrix{T} = zeros(10, 10)
+    t::Vector{T} = zeros(10)
+    hm::Matrix{C} = zeros(ComplexF64, 10, 10, 10, 10)
+    hm_corr::Matrix{C} = zeros(ComplexF64, 10, 10)
+    d_ln_x::T = log(x[2] / x[1])
+    ϕa_corr::Matrix{T} = zeros(10, 10)
+    original_length::Int = length(x)
+    gll::Matrix{C} = zeros(ComplexF64, 100, 100, 100, 100)
+    ν::T = 1.01
+    n_extrap_low::Int = 0
+    n_extrap_high::Int = 0
+    c_window_width::T = 0.25
+    n_pad::Int = 0
+    n::Int = 0
+    N::Int = original_length + n_extrap_low + n_extrap_high + 2 * n_pad
+    m::Vector{T} = zeros(N)
+    cm::Vector{C} = zeros(ComplexF64, N)
+    ηm::Vector{T} = zeros(N)
+    plan_rfft::FFTW.rFFTWPlan = plan_rfft(randn(1024))
+    plan_irfft =
+        plan_irfft(
+            randn(Complex{Float64}, 2, Int((original_length + n_extrap_low + n_extrap_high + 2 * n_pad) / 2) + 1),
+            original_length + n_extrap_low + n_extrap_high + 2 * n_pad,
+            2
+        )
 end
 
 
@@ -310,6 +361,17 @@ function _eval_gl(ell, z::Vector, n::Int)
 end
 
 
+function _eval_gll(l1, l2, t, z::Vector)
+    @. gll = 
+        2^(z - 1) * gamma((l1 + l2 + z) / 2) /
+        (gamma((z - 1 + l2 - l1) / 2) * gamma(l2 + 3 / 2)) *
+        t^l2 * hypergeometric_2f1(
+            (z - 1 + l2 - l1)/2, (l1 + l2 + z)/2, l2 + 3/2, t^2
+        )
+
+    return gll
+end
+
 
 """
     _eval_y!(plan::AbstractPlan, ell::Vector)
@@ -343,11 +405,29 @@ function _eval_y!(plan::AbstractPlan, ell::Vector)
 end
 
 
+function _eval_y!(plan::DoubleBesselPlan, l1::Vector, l2::Vector)
+    reverse!(plan.x)
+
+    plan.y = zeros(length(ell), length(plan.x))
+    plan.fy_corr = zeros(size(plan.y))
+
+    @inbounds for myl in 1:length(ell)
+        plan.y[myl, :] = (ell[myl] + 1) ./ plan.x
+        plan.fy_corr[myl, :] =
+            plan.y[myl, :] .^ (-plan.ν) .* sqrt(π) ./ 4
+    end
+
+    plan.fy = zeros(size(plan.y))
+
+    reverse!(plan.x)
+end
+
+
 """
     _eval_gl_hm!(plan::AbstractPlan, ell::Vector)
 
 Given an input `plan::AbstractPlan`, compute the ``g_{\\ell}`` values and 
-the ``h_m`` coefficents inside the IFFT. They are, respectively:
+the ``h_{m, \\mathrm{corr}}`` coefficents inside the IFFT. They are, respectively:
 
 ```math
 g_{\\ell}^{(n)}(z) = (-1)^n \\, 2^{z-n} \\, \\frac{
@@ -355,7 +435,7 @@ g_{\\ell}^{(n)}(z) = (-1)^n \\, 2^{z-n} \\, \\frac{
     }{
         \\Gamma\\left(\\frac{3 + \\ell + n - z}{2}\\right)
     } \\; , \\quad\\quad 
-h_m = (x_0 y_0)^{- i \\eta_m}
+h_{m, \\mathrm{corr}} = (x_0 y_0)^{- i \\eta_m}
 ```
 where ``\\eta_m = \\frac{2 \\pi m}{N \\, \\Delta_{\\ln x}}``, and ``x_0``
 ``y_0`` are the smallest values of `plan.x` and `plan.y`, respectively. 
@@ -393,8 +473,8 @@ In other words, it computes:
 - the `y` vector of values where the transformed will be evaluated (stored in `plan.y`).
 - the corresponding `gl` vector of ``g_{\\ell}`` values (stored in `plan.gl`).
 - the `m` vector of indexes for the ``c_m`` coefficents (stored in `plan.m`).
-- the corresponding `ηm` and `hm` vector of ``\\eta_m`` and ``h_m`` values 
-  (stored in `plan.ηm` and `plan.hm_corr`).
+- the corresponding `ηm` and `hm_corr` vector of ``\\eta_m`` and ``h_{m, \\mathrm{corr}}`` 
+  values (stored in `plan.ηm` and `plan.hm_corr`).
 
 See also: [`AbstractPlan`](@ref)
 """
@@ -411,7 +491,7 @@ function prepare_FFTLog!(plan::AbstractPlan, ell::Vector)
 
     plan.plan_rfft = plan_rfft(plan.x)
     plan.plan_irfft = plan_irfft(
-        randn(Complex{Float64}, length(ell), Int((length(plan.x) / 2) + 1) ),
+        randn(Complex{Float64}, length(ell), Int((length(plan.x) / 2) + 1)),
         plan.original_length + plan.n_extrap_low + plan.n_extrap_high + 2 * plan.n_pad, 2)
 end
 
