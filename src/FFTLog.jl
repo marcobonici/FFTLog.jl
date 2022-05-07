@@ -240,9 +240,8 @@ end
         plan_irfft(
             randn(Complex{Float64}, 2, 2, 2, Int(NNN / 2) + 1),
             NNN,
-            (2, 2, 2)
+            4
         )
-        irfft
         end
 end
 
@@ -547,7 +546,7 @@ function prepare_FFTLog!(plan::DoubleBesselPlan, l1::Vector, l2::Vector, t::Vect
     NNN = plan.original_length + plan.n_extrap_low + plan.n_extrap_high + 2 * plan.n_pad
     plan.plan_irfft = plan_irfft(
         randn(Complex{Float64}, length(l1), length(l2), length(t), Int((length(plan.x) / 2) + 1)),
-        NNN, (length(l1), length(l2), length(t))
+        NNN, 4
         )
 end
 
@@ -582,6 +581,12 @@ function get_y(plan::AbstractPlan)
     n1 = plan.n_extrap_low + plan.n_pad + 1
     n2 = plan.n_extrap_low + plan.n_pad + plan.original_length
     return plan.y[:, n1:n2]
+end
+
+function get_y(plan::DoubleBesselPlan)
+    n1 = plan.n_extrap_low + plan.n_pad + 1
+    n2 = plan.n_extrap_low + plan.n_pad + plan.original_length
+    return plan.a[:, :, :, n1:n2]
 end
 
 
@@ -636,17 +641,19 @@ function evaluate_FFTLog!(ϕat, plan::DoubleBesselPlan, fx)
     fx = _zeropad(fx, plan.n_pad)
     _eval_cm!(plan, fx)
 
-    @inbounds for mal1 in 1:length(l1), mal2 in 1:length(l2), mt in 1:length(t)
+    @inbounds for mal1 in 1:size(plan.a)[1], mal2 in 1:size(plan.a)[2], mt in 1:size(plan.a)[3]
         plan.hm[mal1, mal2, mt, :] = plan.cm .* @view plan.gll[mal1, mal2, mt, :]
         plan.hm[mal1, mal2, mt, :] .*= @view plan.hm_corr[mal1, mal2, mt, :]
     end
+
+    println(plan.hm)
 
     plan.ϕat[:, :, :, :] .= plan.plan_irfft * conj!(plan.hm)
     plan.ϕat[:, :, :, :] .*= @view plan.ϕat_corr[:, :, :, :]
 
     n1 = plan.n_extrap_low + plan.n_pad + 1
     n2 = plan.n_extrap_low + plan.n_pad + plan.original_length
-    ϕat[:, :] .= @view plan.ϕat[:, n1:n2]
+    ϕat[:, :, :, :] .= @view plan.ϕat[:, :, :, n1:n2]
 end
 
 
