@@ -3,7 +3,7 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
-using Nemo: hyp2f1, AcbField, ArbField
+using Nemo: AcbField, ArbField, hypergeometric_2f1 #, hyp2f1 
 import Base: *
 
 export prepare_FFTLog!, evaluate_FFTLog, evaluate_FFTLog!
@@ -23,7 +23,7 @@ include("./DoubleBessel.jl")
 
 
 
-function mul!(Y, Q::Union{SingleBesselPlan, DoubleBesselPlan}, A)
+function mul!(Y, Q::Union{SingleBesselPlan,DoubleBesselPlan}, A)
     evaluate_FFTLog!(Y, Q, A)
 end
 
@@ -31,7 +31,7 @@ function mul!(Y, Q::HankelPlan, A)
     Y[:, :] .= evaluate_Hankel!(Y, Q, A)
 end
 
-function *(Q::Union{SingleBesselPlan, DoubleBesselPlan}, A)
+function *(Q::Union{SingleBesselPlan,DoubleBesselPlan}, A)
     evaluate_FFTLog(Q, A)
 end
 

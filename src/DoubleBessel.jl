@@ -35,7 +35,8 @@ end
 
 function my_hyp2f1(a, b, c, x) 
     convert(ComplexF64, 
-        hyp2f1(
+        hypergeometric_2f1(
+        #hyp2f1(
             AcbField(64)(real(a), imag(a)),
             AcbField(64)(real(b), imag(b)),
             AcbField(64)(real(c), imag(c)),
@@ -49,7 +50,7 @@ function _eval_gll(l1, l2, t, z::Vector)
     gll = zeros(ComplexF64, size(z))
 
     @. gll = 
-        2^(z - 1) * gamma((l1 + l2 + z) / 2) /
+        2^(z - 1) * √π *  gamma((l1 + l2 + z) / 2) /
         (gamma((z - 1 + l2 - l1) / 2) * gamma(l2 + 3 / 2)) *
         t^l2 * my_hyp2f1(
             0.5 * (z - 1 + l2 - l1), 
@@ -62,7 +63,7 @@ function _eval_gll(l1, l2, t, z::Vector)
 end
 
 
-function _eval_y!(plan::DoubleBesselPlan, l1::Vector, l2::Vector, t::Vector)
+function _eval_a!(plan::DoubleBesselPlan, l1::Vector, l2::Vector, t::Vector)
 
     plan.a = zeros(length(l1), length(l2), length(t), length(plan.x))
     plan.ϕat_corr = zeros(size(plan.a))
@@ -71,9 +72,12 @@ function _eval_y!(plan::DoubleBesselPlan, l1::Vector, l2::Vector, t::Vector)
     reverse!(plan.x)
 
     @inbounds for mal1 in 1:length(l1), mal2 in 1:length(l2), mt in 1:length(t)
-        plan.a[mal1, mal2, mt, :] = ((l1[mal1] + l2[mal2]) + 1) ./ plan.x
+        plan.a[mal1, mal2, mt, :] = 1.0 ./ plan.x
+        #println("plan.a[mal1, mal2, mt, :] = $(plan.a[mal1, mal2, mt, :])")
         plan.ϕat_corr[mal1, mal2, mt, :] =
             plan.a[mal1, mal2, mt, :] .^ (-plan.ν) .* sqrt(π) ./ 4
+        #println("plan_ϕat_corr[mal1, mal2, mt, :] = $(plan.ϕat_corr[mal1, mal2, mt, :])")
+    
     end
 
     reverse!(plan.x)
@@ -100,7 +104,7 @@ function prepare_FFTLog!(plan::DoubleBesselPlan, l1::Vector, l2::Vector, t::Vect
     plan.x = _logextrap(plan.x, plan.n_extrap_low + plan.n_pad,
         plan.n_extrap_high + plan.n_pad)
 
-    _eval_y!(plan, l1, l2, t)
+    _eval_a!(plan, l1, l2, t)
 
     plan.m = Array(0:length(plan.x)/2)
     _eval_ηm!(plan)
