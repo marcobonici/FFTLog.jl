@@ -25,3 +25,7 @@ Manifest.toml
 
 # Files in test folder
 test/test*
+
+# Others
+.DS_Store
+.vscode/*
