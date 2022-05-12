@@ -3,11 +3,11 @@ using Test
 using DelimitedFiles
 using NPZ
 
-#=
+
 run(`wget https://zenodo.org/record/6021744/files/test_FFTLog.tar.xz\?download=1`)
 run(`mv test_FFTLog.tar.xz\?download=1 test_FFTLog.tar.xz`)
 run(`tar xvf test_FFTLog.tar.xz`)
-=#
+
 
 
 input_path = pwd() * "/test_FFTLog/"

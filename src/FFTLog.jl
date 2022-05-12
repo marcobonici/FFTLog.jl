@@ -3,7 +3,7 @@ module FFTLog
 using FFTW
 using Base: @kwdef
 using SpecialFunctions: gamma
-using Nemo: AcbField, ArbField, hypergeometric_2f1 #, hyp2f1 
+using Nemo: AcbField, ArbField, hyp2f1 #, hypergeometric_2f1
 import Base: *
 
 export prepare_FFTLog!, evaluate_FFTLog, evaluate_FFTLog!
